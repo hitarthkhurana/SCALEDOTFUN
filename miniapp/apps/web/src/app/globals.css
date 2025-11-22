@@ -1,0 +1,200 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;750;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* GT Alpina approximation using system serif with custom styling */
+@font-face {
+  font-family: 'GT Alpina';
+  src: local('Georgia'), local('Times New Roman');
+  font-weight: 100 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'GT Alpina';
+  src: local('Georgia'), local('Times New Roman');
+  font-weight: 100 900;
+  font-style: italic;
+}
+
+@layer base {
+  :root {
+    /* Celo Brand Colors as CSS Variables */
+    --celo-yellow: #FCFF52;
+    --celo-forest: #4E632A;
+    --celo-purple: #1A0329;
+    --celo-tan: #FBF6F1;
+    --celo-sand: #E6E3D5;
+    --celo-brown: #635949;
+    --celo-pink: #F2A9E7;
+    --celo-orange: #F29E5F;
+    --celo-lime: #B2EBA1;
+    --celo-blue: #8AC0F9;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 216 33% 97%;
+    --ring: 215 20.2% 65.1%;
+
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+
+    --radius: 0rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-inter;
+  }
+
+  /* Celo Typography - Headlines with GT Alpina feel */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'GT Alpina', Georgia, serif;
+    font-weight: 100;
+    letter-spacing: -0.03em;
+  }
+}
+
+@layer components {
+  /* Celo Button Styles */
+  .btn-celo-primary {
+    @apply bg-celo-yellow text-black font-inter font-bold uppercase tracking-tight px-8 py-4;
+    @apply border-4 border-black transition-all duration-150;
+    @apply hover:bg-black hover:text-celo-yellow hover:border-celo-yellow;
+    @apply active:scale-95;
+  }
+
+  .btn-celo-secondary {
+    @apply bg-celo-purple text-celo-yellow font-inter font-bold uppercase tracking-tight px-8 py-4;
+    @apply border-4 border-celo-yellow transition-all duration-150;
+    @apply hover:bg-celo-yellow hover:text-celo-purple hover:border-celo-purple;
+    @apply active:scale-95;
+  }
+
+  .btn-celo-forest {
+    @apply bg-celo-forest text-celo-yellow font-inter font-bold uppercase tracking-tight px-8 py-4;
+    @apply border-4 border-celo-yellow transition-all duration-150;
+    @apply hover:bg-celo-yellow hover:text-celo-forest hover:border-celo-forest;
+    @apply active:scale-95;
+  }
+
+  /* Celo Input Styles */
+  .input-celo {
+    @apply bg-celo-tan text-celo-purple font-inter font-medium px-4 py-3;
+    @apply border-4 border-celo-purple outline-none;
+    @apply placeholder:text-celo-brown/60;
+    @apply focus:border-celo-yellow focus:bg-white;
+    @apply transition-all duration-150;
+  }
+
+  /* Celo Card/Block Styles */
+  .block-celo {
+    @apply bg-celo-purple text-celo-tan p-6;
+    @apply border-4 border-black;
+  }
+
+  .block-celo-light {
+    @apply bg-celo-tan text-celo-purple p-6;
+    @apply border-4 border-celo-purple;
+  }
+
+  /* Industrial Label Style */
+  .label-celo {
+    @apply font-inter font-extrabold text-xs uppercase tracking-widest;
+  }
+
+  /* Counter Arrow Buttons */
+  .counter-btn {
+    @apply w-14 h-14 flex items-center justify-center;
+    @apply bg-celo-forest text-celo-yellow text-2xl font-bold;
+    @apply border-4 border-celo-yellow;
+    @apply hover:bg-celo-yellow hover:text-celo-forest hover:border-celo-forest;
+    @apply active:scale-90 transition-all duration-100;
+    @apply select-none cursor-pointer;
+  }
+}
+
+@layer utilities {
+  /* Celo Typography Utilities */
+  .text-headline {
+    font-family: 'GT Alpina', Georgia, serif;
+    font-weight: 100;
+    letter-spacing: -0.03em;
+    line-height: 0.9;
+  }
+
+  .text-headline-italic {
+    font-family: 'GT Alpina', Georgia, serif;
+    font-weight: 100;
+    font-style: italic;
+    letter-spacing: -0.03em;
+    line-height: 0.9;
+  }
+
+  .text-industrial {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+}
