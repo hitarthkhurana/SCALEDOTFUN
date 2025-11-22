@@ -251,8 +251,8 @@ export function FeedScreen({ onBack }: FeedScreenProps) {
                 {/* Content Area */}
                 <div className="flex-1 flex flex-col items-center justify-center bg-zinc-900 p-6 pb-32 relative">
                     
-                    {/* Context Badge */}
-                    <div className="absolute top-24 bg-white/10 backdrop-blur-sm px-3 py-1 rounded text-xs uppercase tracking-widest font-bold mb-4 z-10">
+                    {/* Context Badge - Now relative with spacing */}
+                    <div className="bg-white/10 backdrop-blur-sm px-3 py-1 rounded text-xs uppercase tracking-widest font-bold mb-8 mt-20 z-10">
                         {task.context}
                     </div>
 
