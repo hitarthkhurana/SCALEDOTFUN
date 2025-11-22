@@ -33,7 +33,7 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
       </button>
       
       <p className="mt-6 text-xs text-celo-sand/60 font-inter">
-        Powered by Self Protocol & World ID
+        Powered by Self Protocol
       </p>
     </div>
   );
