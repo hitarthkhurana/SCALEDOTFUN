@@ -3,6 +3,8 @@ import { cn } from "@/lib/utils";
 
 interface FeedScreenProps {
   onBack: () => void;
+  currentBalance: number;
+  onEarn: (amount: number) => void;
 }
 
 // Mock Data
@@ -167,16 +169,15 @@ function BoundingBoxTask({ content, onComplete }: { content: string, onComplete:
     );
 }
 
-export function FeedScreen({ onBack }: FeedScreenProps) {
+export function FeedScreen({ onBack, currentBalance, onEarn }: FeedScreenProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [balance, setBalance] = useState(124.50);
   const [streak, setStreak] = useState(3);
   const [showReward, setShowReward] = useState<{amount: number, x: number, y: number} | null>(null);
   const [isBalanceAnimating, setIsBalanceAnimating] = useState(false);
 
   const handleAnswer = (reward: number, e: React.MouseEvent) => {
-    // 1. Update Balance
-    setBalance(prev => prev + reward);
+    // 1. Update Balance (via parent prop)
+    onEarn(reward);
     setStreak(prev => prev + 1);
 
     // 2. Trigger Jackpot Animation
@@ -223,7 +224,7 @@ export function FeedScreen({ onBack }: FeedScreenProps) {
             isBalanceAnimating ? "animate-jackpot z-[60]" : "animate-pulse-slow"
          )}>
             <span className="text-xl">🪙</span>
-            <span className="font-mono font-bold text-lg">{balance.toFixed(2)}</span>
+            <span className="font-mono font-bold text-lg">{currentBalance.toFixed(2)}</span>
          </div>
       </div>
 

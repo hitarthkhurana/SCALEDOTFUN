@@ -2,10 +2,12 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface DashboardScreenProps {
+  balance: number;
   onStartTask: () => void;
+  onClaim: () => void;
 }
 
-export function DashboardScreen({ onStartTask }: DashboardScreenProps) {
+export function DashboardScreen({ balance, onStartTask, onClaim }: DashboardScreenProps) {
   
   return (
     <div className="min-h-screen bg-celo-tan flex flex-col">
@@ -21,10 +23,13 @@ export function DashboardScreen({ onStartTask }: DashboardScreenProps) {
                     <p className="text-sm font-bold">@alex_latam</p>
                  </div>
             </div>
-            <div className="bg-celo-forest px-3 py-1 rounded-full border border-celo-lime flex items-center gap-2">
+            <button 
+                onClick={onClaim}
+                className="bg-celo-forest px-3 py-1 rounded-full border border-celo-lime flex items-center gap-2 active:scale-95 transition-transform hover:bg-celo-forest/80"
+            >
                 <span className="text-celo-yellow text-lg">🪙</span>
-                <span className="font-mono font-bold text-white">124.50</span>
-            </div>
+                <span className="font-mono font-bold text-white">{balance.toFixed(2)}</span>
+            </button>
         </div>
 
         <div className="grid grid-cols-2 gap-4 mt-4">
@@ -116,7 +121,7 @@ export function DashboardScreen({ onStartTask }: DashboardScreenProps) {
                     {[
                         { rank: 4, name: "@ana_maria", amount: "$156.50" },
                         { rank: 5, name: "@carlos_dev", amount: "$142.00" },
-                        { rank: 6, name: "@you", amount: "$124.50", isMe: true },
+                        { rank: 6, name: "@you", amount: balance.toFixed(2), isMe: true },
                     ].map((user) => (
                         <div key={user.rank} className={cn("flex items-center justify-between p-3", user.isMe && "bg-celo-yellow/20")}>
                             <div className="flex items-center gap-3">
