@@ -1,0 +1,30 @@
+{
+  "name": "scaledotfun-filecoin",
+  "version": "1.0.0",
+  "description": "Filecoin integration for scale.fun using Synapse SDK",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "upload": "tsx examples/upload.ts",
+    "retrieve": "tsx examples/retrieve.ts",
+    "test": "tsx examples/test.ts"
+  },
+  "keywords": [
+    "filecoin",
+    "synapse",
+    "storage",
+    "decentralized"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@filoz/synapse-sdk": "latest",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
