@@ -53,7 +53,7 @@ if (!pieceCid) {
 }
 
 // Run the example
-retrieveFile(cid)
+retrieveFile(pieceCid)
   .then(() => {
     console.log('\n✅ Retrieval example completed successfully!');
   })

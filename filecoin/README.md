@@ -1,218 +1,83 @@
-# Filecoin Integration for scale.fun
+# Filecoin for scale.fun
 
-Simple Filecoin storage using Synapse SDK - **100% FREE on testnet!**
+**FREE testnet storage using Synapse SDK**
 
-## 🎯 What This Does
+## What We're Doing
 
-- **Upload**: AI Labs upload datasets to Filecoin
-- **Download**: Workers fetch images to label
-- **Store**: Labeled datasets stored on Filecoin
+1. **Upload**: AI Labs upload files (images/audio/video/text) → Get CID
+2. **Store**: Save CID in database (keep secret!)
+3. **Proxy**: Backend downloads from Filecoin → Streams to worker
+4. **Worker**: Gets file (NEVER sees CID = cannot leak!)
 
-## ✅ **IT'S FREE!** (On Calibration Testnet)
+## Simple Truth
 
-**No credit card. No API key. Just free test tokens!**
+- **ONE CID** returned from upload - use it for everything
+- **Works with ANY file type** - images, mp3, txt, video, etc.
+- **CID stays on backend** - never give to worker
+- **Backend proxies downloads** - full control
 
-1. Get free test tokens from faucets (takes 2 minutes)
-2. Upload/download unlimited
-3. Perfect for hackathon demos!
-
-## 🚀 Super Quick Setup
-
-### Step 1: Get FREE Test Tokens
-
-Go to this faucet and get BOTH tokens:
-👉 **https://faucet.calibnet.chainsafe-fil.io/**
-
-You need:
-- **tFIL** (for gas fees)
-- **USDFC** (for storage payments)
-
-Enter your wallet address → Click get tokens → Done!
-
-### Step 2: Add Your Private Key
+## Setup
 
 ```bash
 cd filecoin
-cp .env.example .env
-nano .env
-```
-
-Add your private key (same one from Self deployment):
-```bash
-PRIVATE_KEY=0xyour_private_key_here
-FILECOIN_NETWORK=calibration
-```
-
-### Step 3: Install & Test
-
-```bash
 npm install
+
+# Add to .env
+PRIVATE_KEY=0xyour_celo_private_key
+FILECOIN_NETWORK=calibration
+
+# Get free test tokens
+# https://faucet.calibnet.chainsafe-fil.io/
+
+# Test it works
 npm run test
 ```
 
-**Expected output:**
-```
-✅ Account funded!
-✅ Uploaded! PieceCID: bafkzcib...
-✅ Downloaded!
-✅ Content matches perfectly!
-🎉 All tests passed!
-```
-
-## 📖 Simple Examples
-
-### Upload a File
+## Scripts
 
 ```bash
-npm run upload
+npm run test          # Upload + download + verify
+npm run upload        # Upload single file
+npm run upload-batch  # Upload multiple files (any type!)
+npm run retrieve CID  # Download file
+npm run demo          # See proxied download pattern
 ```
 
-Returns a **PieceCID** (like `bafkzcib...`) - save this to download later!
+## Code
 
-### Download a File
-
-```bash
-npm run retrieve bafkzcib...
-```
-
-Uses the PieceCID to download the file.
-
-## 💻 Code Examples
-
-### Upload in Your Backend
-
+### Upload (AI Lab Backend)
 ```typescript
-import { Synapse, RPC_URLS } from '@filoz/synapse-sdk';
-
-const synapse = await Synapse.create({
-  privateKey: process.env.PRIVATE_KEY,
-  rpcURL: RPC_URLS.calibration.http,
-});
-
-// Upload image
-const imageData = new TextEncoder().encode(imageContent);
-const { pieceCid } = await synapse.storage.upload(imageData);
-
-// Save pieceCid to database!
-await db.saveImage({ taskId, pieceCid });
+// Works with ANY file type: images, audio, video, text, etc.
+const fileData = fs.readFileSync('audio.mp3'); // or image.jpg, video.mp4, etc.
+const { pieceCid, size } = await synapse.storage.upload(fileData);
+await db.saveFile({ taskId, cid: pieceCid }); // Save to DB
 ```
 
-### Download for Worker
-
+### Download (Backend Proxy for Worker)
 ```typescript
-// Worker needs to label image
+// Backend API: GET /api/tasks/:id/file?worker=0x...
 
-// 1. Get PieceCID from database
-const { pieceCid } = await db.getNextImage(taskId);
+// 1. Check Self Protocol (worker verified?)
+const workerData = await selfContract.getWorkerData(workerAddress);
+if (!workerData.isVerified) return 403;
 
-// 2. Download from Filecoin
-const imageBytes = await synapse.storage.download(pieceCid);
+// 2. Get CID from DB (stays secret!)
+const { cid } = await db.getFile(taskId);
 
-// 3. Show to worker (convert to URL or display directly)
-// Worker draws bounding box and submits
+// 3. Download from Filecoin
+const bytes = await synapse.storage.download(cid);
+
+// 4. Stream to worker (no CID!)
+res.send(Buffer.from(bytes));
 ```
 
-## 🏗️ How It Fits in scale.fun
+## Why Self Contract in Filecoin Code?
 
-### AI Lab Flow:
-```
-1. AI Lab uploads 1000 street images
-2. Each upload returns a PieceCID
-3. Store PieceCIDs in database:
-   { imageId: 1, pieceCid: "bafkzcib..." }
-```
+**It's NOT on Filecoin!** Self Protocol contracts are on **Celo Sepolia**.
 
-### Worker Flow:
-```
-1. Worker starts task
-2. Backend gives PieceCID
-3. Download image from Filecoin
-4. Display to worker
-5. Worker labels it
-```
+The backend just needs to:
+1. Check Celo Sepolia (where Self contract lives) → Is worker verified?
+2. If yes → Download from Filecoin (where data lives)
+3. Stream to worker
 
-### Marketplace Flow:
-```
-1. All images labeled
-2. Compile labels + images
-3. Upload to Filecoin
-4. Get PieceCID for labeled dataset
-5. Mint NFT with PieceCID
-6. Buyers download using PieceCID
-```
-
-## 🤔 Common Questions
-
-### What's a PieceCID?
-**Like a permanent link to your file.**
-
-- Upload → Get PieceCID
-- Download → Use PieceCID
-- Same file = same PieceCID
-- Starts with `bafkzcib...`
-
-### Is it really free?
-**YES on testnet!**
-
-- Get free tokens from faucet
-- Upload/download unlimited
-- Perfect for demos
-
-### What about mainnet (production)?
-**Super cheap:**
-
-- ~$0.50 per GB per year
-- 1000 images (500 MB) = ~$0.25/year
-- Way cheaper than AWS!
-
-### Do I need an API key?
-**NO!** Just your wallet private key (same as Self deployment).
-
-### What was Lighthouse you mentioned?
-**My mistake!** Lighthouse is a different service. We're using **Synapse SDK** (official Filecoin SDK). No API key needed.
-
-## 🐛 Troubleshooting
-
-### "Insufficient balance"
-**Go get test tokens:**
-- Visit: https://faucet.calibnet.chainsafe-fil.io/
-- Get both tFIL and USDFC
-- Wait 30 seconds, try again
-
-### "Private key not found"
-- Check `.env` file exists
-- Make sure PRIVATE_KEY starts with `0x`
-
-### "Account already funded" error
-- This is actually fine! Means you already have funds
-- Test will continue working
-
-## 📚 Resources
-
-- **Get Test Tokens**: https://faucet.calibnet.chainsafe-fil.io/
-- **Synapse Docs**: https://docs.filecoin.cloud/
-- **Synapse GitHub**: https://github.com/FilOzone/synapse-sdk
-
-## ✨ For Other Developers
-
-Just copy code from `examples/` folder into your backend:
-
-```typescript
-// Same pattern for AI Lab uploads
-const { pieceCid } = await synapse.storage.upload(imageData);
-
-// Same pattern for Worker downloads
-const imageBytes = await synapse.storage.download(pieceCid);
-```
-
-That's it! Simple, free, and works! 🎉
-
-## 🎬 Next Steps
-
-1. ✅ Get test tokens (2 minutes)
-2. ✅ Add private key to `.env`
-3. ✅ Run `npm run test`
-4. ✅ See it work!
-5. ✅ Use in your app
-
-**Ready for your hackathon demo!** 🚀
+Two different networks, one backend connects to both! ✅

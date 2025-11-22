@@ -7,8 +7,10 @@
   "scripts": {
     "build": "tsc",
     "upload": "tsx examples/upload.ts",
+    "upload-batch": "tsx examples/upload-batch.ts",
     "retrieve": "tsx examples/retrieve.ts",
-    "test": "tsx examples/test.ts"
+    "test": "tsx examples/test.ts",
+    "demo": "tsx examples/proxied-retrieval.ts"
   },
   "keywords": [
     "filecoin",
