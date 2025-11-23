@@ -26,11 +26,11 @@ export async function POST(request: NextRequest) {
     // Initialize Supabase
     const supabase = await createClient();
 
-    // 1. Fetch all dataset entries
+    // 1. Fetch all dataset entries (group by on_chain_dataset_id)
     const { data: datasetFiles, error: fetchError } = await supabase
       .from('datasets')
       .select('*')
-      .eq('dataset_id', datasetId)
+      .eq('on_chain_dataset_id', datasetId)
       .eq('active', true);
 
     if (fetchError) {
@@ -89,7 +89,8 @@ export async function POST(request: NextRequest) {
 
         // Upload file to Filecoin
         const fileUploadStart = Date.now();
-        const { pieceCid: fileCid } = await synapse.storage.upload(fileBytes);
+        const { pieceCid } = await synapse.storage.upload(fileBytes);
+        const fileCid = pieceCid.toString(); // Convert PieceLink to string
         const fileUploadTime = Date.now() - fileUploadStart;
 
         console.log(`✅ File uploaded: ${fileCid} (${fileUploadTime}ms)`);
@@ -98,19 +99,28 @@ export async function POST(request: NextRequest) {
         const { data: annotations } = await supabase
           .from('annotations')
           .select('*')
-          .eq('dataset_id', datasetId)
-          .eq('dataset_id', file.dataset_id); // Match specific dataset entry
+          .eq('dataset_id', file.dataset_id);
 
         // Create JSON of annotations
         const annotationsJSON = JSON.stringify(annotations || [], null, 2);
         const annotationsBytes = new TextEncoder().encode(annotationsJSON);
 
-        // Upload annotations to Filecoin
-        const annotationsUploadStart = Date.now();
-        const { pieceCid: annotationsCid } = await synapse.storage.upload(annotationsBytes);
-        const annotationsUploadTime = Date.now() - annotationsUploadStart;
+        let annotationsCid = 'no-annotations';
 
-        console.log(`✅ Annotations uploaded: ${annotationsCid} (${annotationsUploadTime}ms)`);
+        // Only upload annotations if they're substantial (>127 bytes for Filecoin minimum)
+        if (annotationsBytes.length >= 127) {
+          try {
+            const annotationsUploadStart = Date.now();
+            const result = await synapse.storage.upload(annotationsBytes);
+            const annotationsUploadTime = Date.now() - annotationsUploadStart;
+            annotationsCid = result.pieceCid.toString();
+            console.log(`✅ Annotations uploaded: ${annotationsCid} (${annotationsUploadTime}ms)`);
+          } catch (err) {
+            console.warn(`⚠️  Skipping annotations upload (error):`, err);
+          }
+        } else {
+          console.log(`⚠️  Skipping annotations upload (${annotationsBytes.length} bytes, need 127+)`);
+        }
 
         // Store result
         filecoinUploads.push({
@@ -129,15 +139,15 @@ export async function POST(request: NextRequest) {
 
     console.log(`🎉 Upload complete! ${filecoinUploads.length}/${datasetFiles.length} files uploaded`);
 
-    // 4. Update database to mark dataset as uploaded
+    // 4. Update ALL rows in this dataset with the CIDs array
     const { error: updateError } = await supabase
       .from('datasets')
       .update({
-        // Store Filecoin CIDs as JSON string (for marketplace contract)
+        // Store ALL Filecoin CIDs as JSON array (shared across all files in dataset)
         filecoin_cid: JSON.stringify(filecoinUploads),
         updated_at: new Date().toISOString(),
       })
-      .eq('dataset_id', datasetId);
+      .eq('on_chain_dataset_id', datasetId);
 
     if (updateError) {
       console.error('Failed to update dataset with Filecoin CIDs:', updateError);

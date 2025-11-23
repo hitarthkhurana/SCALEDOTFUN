@@ -2,8 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { useAccount } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
+import { formatUnits } from "viem";
 import { createClient } from "@/utils/supabase/client";
+import { ERC20_ABI } from "@/abi/ERC20";
+
+// Celo Mainnet cUSD Address
+const CUSD_ADDRESS = "0x765DE816845861e75A25fCA122bb6898B8B1282a";
 
 interface Dataset {
   dataset_id: number;
@@ -24,10 +29,32 @@ interface ProfileScreenProps {
   onUploadToMarketplace: (dataset: Dataset) => void;
 }
 
+interface Purchase {
+  purchase_id: number;
+  listing_id: number;
+  buyer_address: string;
+  price_paid: number;
+  purchased_at: string;
+  dataset_name: string;
+}
+
 export function ProfileScreen({ onUploadToMarketplace }: ProfileScreenProps) {
   const { address } = useAccount();
   const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Fetch cUSD Balance from blockchain
+  const { data: cusdBalance } = useReadContract({
+    address: CUSD_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+  });
+
+  const formattedBalance = cusdBalance
+    ? formatUnits(cusdBalance as bigint, 18)
+    : "0.00";
 
   // Fetch user's datasets from Supabase
   useEffect(() => {
@@ -42,7 +69,6 @@ export function ProfileScreen({ onUploadToMarketplace }: ProfileScreenProps) {
         const normalizedAddress = address.toLowerCase();
 
         // Fetch datasets where user is the funder
-        // Group by dataset_id to get file counts and completion stats
         const { data, error } = await supabase
           .from('datasets')
           .select('*')
@@ -55,15 +81,27 @@ export function ProfileScreen({ onUploadToMarketplace }: ProfileScreenProps) {
           return;
         }
 
-        // Group by dataset_id and calculate stats
+        // Fetch marketplace listings for this user
+        const { data: listings } = await supabase
+          .from('marketplace_listings')
+          .select('*')
+          .or(`curator_address.eq.${normalizedAddress},funder_address.eq.${normalizedAddress}`)
+          .eq('active', true);
+
+        // Create a Set of dataset IDs that are listed
+        const listedDatasetIds = new Set(listings?.map(l => l.dataset_id) || []);
+
+        // Group by on_chain_dataset_id and calculate stats
         const datasetMap = new Map<number, Dataset>();
         
         data?.forEach((row) => {
-          const datasetId = row.dataset_id;
+          // Group by on_chain_dataset_id (multiple files per dataset)
+          const onChainId = row.on_chain_dataset_id || row.dataset_id;
           
-          if (!datasetMap.has(datasetId)) {
-            datasetMap.set(datasetId, {
-              dataset_id: datasetId,
+          if (!datasetMap.has(onChainId)) {
+            const listing = listings?.find(l => l.dataset_id === onChainId);
+            datasetMap.set(onChainId, {
+              dataset_id: onChainId,
               funder_address: row.funder_address,
               curator_address: row.curator_address,
               task: row.task || "No description",
@@ -71,14 +109,14 @@ export function ProfileScreen({ onUploadToMarketplace }: ProfileScreenProps) {
               completed_count: 0,
               completion_percentage: 0,
               filecoin_cid: row.filecoin_cid,
-              listed_on_marketplace: row.listed_on_marketplace || false,
-              marketplace_listing_id: row.marketplace_listing_id,
-              price: row.price,
+              listed_on_marketplace: listedDatasetIds.has(onChainId),
+              marketplace_listing_id: listing?.listing_id || null,
+              price: listing?.price || null,
               created_at: row.created_at,
             });
           }
 
-          const dataset = datasetMap.get(datasetId)!;
+          const dataset = datasetMap.get(onChainId)!;
           dataset.file_count++;
           
           // Check if this file is completed
@@ -96,6 +134,34 @@ export function ProfileScreen({ onUploadToMarketplace }: ProfileScreenProps) {
         }));
 
         setDatasets(datasetsArray);
+
+        // Fetch purchases of user's datasets
+        if (listings && listings.length > 0) {
+          const listingIds = listings.map(l => l.listing_id);
+          const { data: purchasesData } = await supabase
+            .from('marketplace_purchases')
+            .select(`
+              purchase_id,
+              listing_id,
+              buyer_address,
+              price_paid,
+              purchased_at
+            `)
+            .in('listing_id', listingIds)
+            .order('purchased_at', { ascending: false });
+
+          if (purchasesData) {
+            // Join with marketplace_listings to get dataset names
+            const enrichedPurchases = purchasesData.map(purchase => {
+              const listing = listings.find(l => l.listing_id === purchase.listing_id);
+              return {
+                ...purchase,
+                dataset_name: listing?.dataset_name || `Dataset #${listing?.dataset_id}`,
+              };
+            });
+            setPurchases(enrichedPurchases);
+          }
+        }
       } catch (err) {
         console.error('Unexpected error fetching datasets:', err);
       } finally {
@@ -137,6 +203,18 @@ export function ProfileScreen({ onUploadToMarketplace }: ProfileScreenProps) {
             <p className="text-2xl font-bold text-celo-yellow">
               {datasets.filter(d => d.listed_on_marketplace).length}
             </p>
+          </div>
+        </div>
+
+        {/* Wallet Balance */}
+        <div className="mt-3">
+          <div className="bg-celo-yellow/20 p-3 rounded-xl border border-celo-yellow/40 backdrop-blur-sm">
+            <div className="flex items-center justify-between">
+              <p className="text-celo-sand text-xs uppercase font-bold">💰 cUSD Balance</p>
+              <p className="text-lg font-bold text-celo-yellow font-mono">
+                {Number(formattedBalance).toFixed(2)} cUSD
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -201,6 +279,42 @@ export function ProfileScreen({ onUploadToMarketplace }: ProfileScreenProps) {
                     .map((dataset) => (
                       <ListedDatasetCard key={dataset.dataset_id} dataset={dataset} />
                     ))}
+                </div>
+              </div>
+            )}
+
+            {/* Purchase History */}
+            {purchases.length > 0 && (
+              <div className="mt-8">
+                <h3 className="text-headline text-xl text-celo-purple mb-4 flex items-center gap-2">
+                  💰 Sales History
+                  <span className="text-sm bg-celo-purple text-white px-2 py-0.5 rounded-full font-mono">
+                    {purchases.length}
+                  </span>
+                </h3>
+
+                <div className="flex flex-col gap-3">
+                  {purchases.map((purchase) => (
+                    <div 
+                      key={purchase.purchase_id}
+                      className="bg-white p-4 rounded-xl border-2 border-gray-200 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="font-bold text-gray-800">{purchase.dataset_name}</p>
+                        <p className="text-green-600 font-bold font-mono">
+                          +{purchase.price_paid.toFixed(2)} cUSD
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <p className="font-mono">
+                          Buyer: {purchase.buyer_address.slice(0, 6)}...{purchase.buyer_address.slice(-4)}
+                        </p>
+                        <p>
+                          {new Date(purchase.purchased_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

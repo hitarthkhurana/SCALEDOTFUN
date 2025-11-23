@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from "wagmi";
-import { parseUnits, formatUnits } from "viem";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, usePublicClient } from "wagmi";
+import { parseUnits, formatUnits, decodeEventLog } from "viem";
 import { createClient } from "@/utils/supabase/client";
 import { ERC20_ABI } from "@/abi/ERC20";
 import { DATASET_MARKETPLACE_ABI } from "@/abi/DatasetMarketplace";
@@ -34,6 +34,7 @@ type UploadStep = "idle" | "uploading-filecoin" | "listing" | "success" | "error
 
 export function UploadToMarketplaceScreen({ dataset, onBack, onSuccess }: UploadToMarketplaceScreenProps) {
   const { address, isConnected, chain } = useAccount();
+  const publicClient = usePublicClient();
   const [price, setPrice] = useState<string>("");
   const [uploadStep, setUploadStep] = useState<UploadStep>("idle");
   const [errorMessage, setErrorMessage] = useState<string>("");
@@ -94,18 +95,18 @@ export function UploadToMarketplaceScreen({ dataset, onBack, onSuccess }: Upload
       }
 
       const data = await response.json();
-      const cids = data.cids; // Array of {filename, file_cid, annotations_cid}
+      const cids = data.filecoinCIDs; // Array of {filename, file_cid, annotations_cid}
+
+      if (!cids || cids.length === 0) {
+        throw new Error('No CIDs returned from upload');
+      }
 
       // Store CIDs as JSON string
       const cidJson = JSON.stringify(cids);
       setFilecoinCid(cidJson);
 
-      // Update database with Filecoin CID
-      const supabase = createClient();
-      await supabase
-        .from('datasets')
-        .update({ filecoin_cid: cidJson })
-        .eq('dataset_id', dataset.dataset_id);
+      // Database already updated by API, but we set local state
+      console.log("✅ CIDs received from upload:", cids);
 
       console.log("✅ Uploaded to Filecoin:", cidJson);
       return cidJson;
@@ -176,28 +177,69 @@ export function UploadToMarketplaceScreen({ dataset, onBack, onSuccess }: Upload
   // Update database after successful listing
   const handleUpdateDatabase = async () => {
     try {
-      const supabase = createClient();
-
-      // Get the listing ID from smart contract
-      // For now, we'll use dataset_id as listing_id (adjust if needed)
-      const listingId = dataset.dataset_id;
-
-      // Update all dataset rows with listing info
-      const { error } = await supabase
-        .from('datasets')
-        .update({
-          listed_on_marketplace: true,
-          marketplace_listing_id: listingId,
-          price: parseFloat(price),
-        })
-        .eq('dataset_id', dataset.dataset_id);
-
-      if (error) {
-        console.error("Failed to update database:", error);
-        throw error;
+      if (!listHash || !publicClient) {
+        throw new Error("Missing transaction hash or public client");
       }
 
-      console.log("✅ Database updated successfully");
+      const supabase = createClient();
+
+      // Get the transaction receipt to extract the real listing ID from the event
+      console.log("📥 Fetching transaction receipt...");
+      const receipt = await publicClient.getTransactionReceipt({ hash: listHash });
+
+      // Find the DatasetListed event
+      const datasetListedLog = receipt.logs.find((log) => {
+        try {
+          const decoded = decodeEventLog({
+            abi: DATASET_MARKETPLACE_ABI,
+            data: log.data,
+            topics: log.topics,
+          });
+          return decoded.eventName === "DatasetListed";
+        } catch {
+          return false;
+        }
+      });
+
+      if (!datasetListedLog) {
+        throw new Error("DatasetListed event not found in transaction");
+      }
+
+      // Decode the event to get the listing ID
+      const decoded = decodeEventLog({
+        abi: DATASET_MARKETPLACE_ABI,
+        data: datasetListedLog.data,
+        topics: datasetListedLog.topics,
+      });
+
+      const listingId = Number((decoded.args as any).listingId);
+      console.log("✅ Got on-chain listing ID:", listingId);
+
+      // 1. Create marketplace listing entry
+      const { error: listingError } = await supabase
+        .from('marketplace_listings')
+        .insert({
+          listing_id: listingId,
+          dataset_id: dataset.dataset_id,
+          curator_address: address!,
+          funder_address: dataset.funder_address,
+          dataset_name: `Dataset #${dataset.dataset_id}`,
+          task_description: dataset.task || "High-quality labeled dataset",
+          file_count: dataset.file_count,
+          filecoin_cid: filecoinCid || '',
+          price: parseFloat(price),
+          active: true,
+          total_purchases: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+
+      if (listingError) {
+        console.error("Failed to create marketplace listing:", listingError);
+        throw listingError;
+      }
+
+      console.log("✅ Marketplace listing created successfully!");
       setUploadStep("success");
       
       // Delay and trigger success callback

@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { DATASET_MARKETPLACE_ABI } from "@/abi/DatasetMarketplace";
 import { ERC20_ABI } from "@/abi/ERC20";
+import { DownloadDatasetButton } from "@/components/DownloadDatasetButton";
 import { cn } from "@/lib/utils";
 
 interface MarketplaceScreenProps {
@@ -18,12 +19,14 @@ const CUSD_ADDRESS = "0x765DE816845861e75A25fCA122bb6898B8B1282a"; // Mainnet
 interface Listing {
   listing_id: number;
   curator_address: string;
+  funder_address: string;
   price: number;
-  filecoin_cids: string[];
+  filecoin_cid: string;
   active: boolean;
   dataset_id: number;
-  name: string;
-  description: string;
+  dataset_name: string;
+  task_description: string;
+  file_count: number;
 }
 
 export function MarketplaceScreen({ onLaunch }: MarketplaceScreenProps) {
@@ -35,6 +38,7 @@ export function MarketplaceScreen({ onLaunch }: MarketplaceScreenProps) {
   const [loading, setLoading] = useState(true);
   const [buyingId, setBuyingId] = useState<number | null>(null);
   const [buyStatus, setBuyStatus] = useState<string>("");
+  const [purchasedListingIds, setPurchasedListingIds] = useState<Set<number>>(new Set());
 
   // Fetch cUSD Balance
   const { data: cusdBalance } = useReadContract({
@@ -46,7 +50,7 @@ export function MarketplaceScreen({ onLaunch }: MarketplaceScreenProps) {
 
   const formattedBalance = cusdBalance ? formatUnits(cusdBalance as bigint, 18) : "0.00";
 
-  // Fetch marketplace listings from Supabase
+  // Fetch marketplace listings and purchases from Supabase
   useEffect(() => {
     async function fetchListings() {
       try {
@@ -59,15 +63,31 @@ export function MarketplaceScreen({ onLaunch }: MarketplaceScreenProps) {
 
         if (error) throw error;
         setListings(data || []);
-      } catch (error) {
-        console.error('Failed to fetch listings:', error);
+
+        // Fetch user's purchases if logged in
+        if (address) {
+          const { data: purchases } = await supabase
+            .from('marketplace_purchases')
+            .select('listing_id')
+            .eq('buyer_address', address.toLowerCase());
+          
+          console.log('📦 Fetched purchases:', purchases);
+          
+          if (purchases && purchases.length > 0) {
+            const purchasedSet = new Set(purchases.map(p => p.listing_id));
+            console.log('✅ Purchased listing IDs:', Array.from(purchasedSet));
+            setPurchasedListingIds(purchasedSet);
+          }
+        }
+      } catch (err) {
+        console.error('Unexpected error fetching listings:', err);
       } finally {
         setLoading(false);
       }
     }
 
     fetchListings();
-  }, []);
+  }, [address]);
 
   // Handle buy dataset
   const handleBuy = async (listing: Listing) => {
@@ -121,24 +141,44 @@ export function MarketplaceScreen({ onLaunch }: MarketplaceScreenProps) {
         .from('marketplace_purchases')
         .insert({
           listing_id: listing.listing_id,
-          buyer_address: address,
+          buyer_address: address.toLowerCase(),
           price_paid: listing.price,
-          transaction_hash: buyTx,
+          tx_hash: buyTx,
           purchased_at: new Date().toISOString(),
         });
 
       if (purchaseError) {
         console.error('Failed to record purchase:', purchaseError);
+        throw new Error('Failed to record purchase in database');
       }
 
-      setBuyStatus("Success! 🎉");
+      console.log('✅ Purchase recorded in database');
+
+      // 5. Update total_purchases count
+      const { data: currentListing } = await supabase
+        .from('marketplace_listings')
+        .select('total_purchases')
+        .eq('listing_id', listing.listing_id)
+        .single();
       
-      // Refresh listings after 2 seconds
-      setTimeout(() => {
-        setBuyingId(null);
-        setBuyStatus("");
-        window.location.reload();
-      }, 2000);
+      if (currentListing) {
+        await supabase
+          .from('marketplace_listings')
+          .update({ 
+            total_purchases: (currentListing.total_purchases || 0) + 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('listing_id', listing.listing_id);
+      }
+
+      setBuyStatus("");
+      setBuyingId(null);
+      
+      // Add to purchased set immediately
+      setPurchasedListingIds(prev => new Set([...prev, listing.listing_id]));
+      
+      // Show download UI (don't reload - let user download files)
+      alert(`Purchase successful! 🎉\n\nYour dataset is ready to download. Look for the green download button on this listing!`);
 
     } catch (error: any) {
       console.error('Buy error:', error);
@@ -275,37 +315,44 @@ export function MarketplaceScreen({ onLaunch }: MarketplaceScreenProps) {
                       </div>
                       <div className="flex-1 pr-8">
                         <h4 className="font-bold text-lg leading-tight">
-                          {listing.name || `Dataset #${listing.dataset_id}`}
+                          {listing.dataset_name || `Dataset #${listing.dataset_id}`}
                         </h4>
                         <p className="text-xs text-gray-500 mb-2">
                           by {listing.curator_address.slice(0, 6)}...{listing.curator_address.slice(-4)}
                         </p>
                         <p className="text-sm text-gray-800 line-clamp-2 mb-3">
-                          {listing.description || "High-quality labeled dataset"}
+                          {listing.task_description || "High-quality labeled dataset"}
                         </p>
                         
                         <div className="flex items-center justify-between">
                           <div className="text-sm font-mono font-bold">
                             <span className="text-green-600">Price: {listing.price} cUSD</span>
                           </div>
-                          <button
-                            onClick={() => handleBuy(listing)}
-                            disabled={isBuying || !address}
-                            className="bg-celo-yellow text-black font-bold px-4 py-2 rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_#000] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {isBuying ? (
-                              <span className="flex items-center gap-2">
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                Buying...
-                              </span>
-                            ) : (
-                              "Buy Now"
-                            )}
-                          </button>
+                          {purchasedListingIds.has(listing.listing_id) ? (
+                            <DownloadDatasetButton 
+                              listingId={listing.listing_id}
+                              datasetName={listing.dataset_name}
+                            />
+                          ) : (
+                            <button
+                              onClick={() => handleBuy(listing)}
+                              disabled={isBuying || !address}
+                              className="bg-celo-yellow text-black font-bold px-4 py-2 rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_#000] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {isBuying ? (
+                                <span className="flex items-center gap-2">
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Buying...
+                                </span>
+                              ) : (
+                                "Buy Now"
+                              )}
+                            </button>
+                          )}
                         </div>
 
                         <div className="mt-3 text-xs text-gray-500">
-                          <span>📦 {listing.filecoin_cids?.length || 0} files included</span>
+                          <span>📦 {listing.file_count || 0} files included</span>
                         </div>
                       </div>
                     </div>

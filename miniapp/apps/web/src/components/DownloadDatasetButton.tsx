@@ -1,6 +1,5 @@
 
 import { useState } from "react";
-import { Synapse, RPC_URLS } from "@filoz/synapse-sdk";
 import { createClient } from "@/utils/supabase/client";
 
 interface DownloadDatasetButtonProps {
@@ -15,10 +14,19 @@ interface FileCID {
   file_type: string;
 }
 
+interface DownloadedFile {
+  filename: string;
+  dataUrl: string;
+  type: string;
+  annotations?: any;
+}
+
 export function DownloadDatasetButton({ listingId, datasetName }: DownloadDatasetButtonProps) {
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [downloadedFiles, setDownloadedFiles] = useState<DownloadedFile[]>([]);
+  const [viewingFile, setViewingFile] = useState<DownloadedFile | null>(null);
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -42,52 +50,55 @@ export function DownloadDatasetButton({ listingId, datasetName }: DownloadDatase
       const fileCIDs: FileCID[] = JSON.parse(listing.filecoin_cid);
       console.log(`📦 Found ${fileCIDs.length} files to download`);
 
-      setProgress(`Found ${fileCIDs.length} files. Starting download...`);
+      setProgress(`Downloading ${fileCIDs.length} files...`);
 
-      // 2. Initialize Synapse SDK (same as retrieve.ts)
-      const synapse = await Synapse.create({
-        rpcURL: RPC_URLS.calibration.http,
-      });
+      // 2. Download all files
+      const files: DownloadedFile[] = [];
 
-      // 3. Download each file
-      let downloadedCount = 0;
       for (const fileInfo of fileCIDs) {
         try {
-          setProgress(`Downloading ${fileInfo.filename} (${downloadedCount + 1}/${fileCIDs.length})...`);
+          const decodedFilename = decodeURIComponent(fileInfo.filename);
+          console.log(`📥 Downloading: ${decodedFilename}`);
 
-          // Download the main file
-          console.log(`📥 Retrieving file: ${fileInfo.file_cid}`);
-          const fileData = await synapse.storage.retrieve(fileInfo.file_cid);
+          // Download the file
+          const fileUrl = `/api/datasets/download-from-filecoin?cid=${fileInfo.file_cid}&filename=${encodeURIComponent(decodedFilename)}`;
+          const fileResponse = await fetch(fileUrl);
 
-          // Download the annotations
-          console.log(`📥 Retrieving annotations: ${fileInfo.annotations_cid}`);
-          const annotationsData = await synapse.storage.retrieve(fileInfo.annotations_cid);
+          if (fileResponse.ok) {
+            const fileBlob = await fileResponse.blob();
+            const dataUrl = URL.createObjectURL(fileBlob);
 
-          // Convert to blobs and trigger download
-          const fileBlob = new Blob([fileData], { type: getFileType(fileInfo.file_type) });
-          const annotationsBlob = new Blob([annotationsData], { type: 'application/json' });
+            let annotations = null;
 
-          // Download main file
-          downloadBlob(fileBlob, fileInfo.filename);
-          
-          // Download annotations
-          const annotationsFilename = fileInfo.filename.replace(/\.[^/.]+$/, '_annotations.json');
-          downloadBlob(annotationsBlob, annotationsFilename);
+            // Download annotations if available
+            if (fileInfo.annotations_cid && fileInfo.annotations_cid !== 'no-annotations') {
+              const annotationsUrl = `/api/datasets/download-from-filecoin?cid=${fileInfo.annotations_cid}&filename=${encodeURIComponent(decodedFilename + '_annotations.json')}`;
+              const annotationsResponse = await fetch(annotationsUrl);
 
-          downloadedCount++;
-          console.log(`✅ Downloaded: ${fileInfo.filename}`);
+              if (annotationsResponse.ok) {
+                const annotationsBlob = await annotationsResponse.blob();
+                const annotationsText = await annotationsBlob.text();
+                annotations = JSON.parse(annotationsText);
+              }
+            }
 
+            files.push({
+              filename: decodedFilename,
+              dataUrl,
+              type: fileInfo.file_type,
+              annotations,
+            });
+
+            console.log(`✅ Downloaded: ${decodedFilename}`);
+          }
         } catch (err) {
           console.error(`❌ Failed to download ${fileInfo.filename}:`, err);
-          // Continue with other files
         }
       }
 
-      setProgress(`✅ Downloaded ${downloadedCount}/${fileCIDs.length} files!`);
-      setTimeout(() => {
-        setDownloading(false);
-        setProgress("");
-      }, 3000);
+      setDownloadedFiles(files);
+      setProgress(`✅ Downloaded ${files.length} files! Click to view.`);
+      setDownloading(false);
 
     } catch (err) {
       console.error("Download error:", err);
@@ -97,13 +108,13 @@ export function DownloadDatasetButton({ listingId, datasetName }: DownloadDatase
   };
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       <button
         onClick={handleDownload}
-        disabled={downloading}
+        disabled={downloading || downloadedFiles.length > 0}
         className="w-full bg-celo-forest text-white font-bold py-3 px-4 rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_#000] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {downloading ? "⏳ Downloading..." : "📥 Download All Files"}
+        {downloading ? "⏳ Downloading..." : downloadedFiles.length > 0 ? "✅ Downloaded" : "📥 Download All Files"}
       </button>
 
       {progress && (
@@ -118,41 +129,97 @@ export function DownloadDatasetButton({ listingId, datasetName }: DownloadDatase
         </div>
       )}
 
-      <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-3 text-xs text-yellow-900">
-        <p className="font-bold mb-1">💡 Download Info:</p>
-        <ul className="list-disc list-inside space-y-1">
-          <li>Files will download to your browser's download folder</li>
-          <li>Each file comes with its annotations JSON</li>
-          <li>Large datasets may take a few minutes</li>
-        </ul>
-      </div>
+      {/* Downloaded files list */}
+      {downloadedFiles.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {downloadedFiles.map((file, idx) => (
+            <button
+              key={idx}
+              onClick={() => setViewingFile(file)}
+              className="bg-white border-2 border-gray-300 rounded-lg p-3 text-left hover:bg-gray-50 transition-colors"
+            >
+              <p className="font-bold text-sm text-gray-800 truncate">{file.filename}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {file.type === 'image' ? '🖼️' : file.type === 'audio' ? '🎵' : '📄'} {file.type}
+                {file.annotations && ' • Has annotations'}
+              </p>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Preview Modal (not fullscreen) */}
+      {viewingFile && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setViewingFile(null)}
+        >
+          <div 
+            className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-auto shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="sticky top-0 bg-white border-b-2 border-gray-200 p-4 flex items-center justify-between">
+              <p className="font-bold text-gray-800 truncate flex-1">{viewingFile.filename}</p>
+              <button
+                onClick={() => setViewingFile(null)}
+                className="bg-red-500 text-white px-3 py-1 rounded-lg font-bold ml-2"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-4">
+              {/* Image */}
+              {viewingFile.type === 'image' && (
+                <div className="mb-4">
+                  <img 
+                    src={viewingFile.dataUrl} 
+                    alt={viewingFile.filename}
+                    className="w-full rounded-lg border-2 border-gray-200"
+                  />
+                  <a
+                    href={viewingFile.dataUrl}
+                    download={viewingFile.filename}
+                    className="mt-2 block w-full bg-celo-yellow text-black font-bold py-2 px-4 rounded-lg border-2 border-black text-center"
+                  >
+                    💾 Save Image
+                  </a>
+                </div>
+              )}
+
+              {/* Audio */}
+              {viewingFile.type === 'audio' && (
+                <div className="mb-4">
+                  <audio 
+                    src={viewingFile.dataUrl} 
+                    controls 
+                    className="w-full rounded-lg border-2 border-gray-200"
+                  />
+                  <a
+                    href={viewingFile.dataUrl}
+                    download={viewingFile.filename}
+                    className="mt-2 block w-full bg-celo-yellow text-black font-bold py-2 px-4 rounded-lg border-2 border-black text-center"
+                  >
+                    💾 Save Audio
+                  </a>
+                </div>
+              )}
+
+              {/* Annotations */}
+              {viewingFile.annotations && (
+                <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-3">
+                  <p className="font-bold text-sm text-gray-700 mb-2">📝 Annotations:</p>
+                  <pre className="text-xs text-gray-600 overflow-auto max-h-60">
+                    {JSON.stringify(viewingFile.annotations, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-// Helper: Get MIME type from file type
-function getFileType(fileType: string): string {
-  switch (fileType) {
-    case 'image':
-      return 'image/jpeg';
-    case 'audio':
-      return 'audio/wav';
-    case 'text':
-      return 'text/plain';
-    default:
-      return 'application/octet-stream';
-  }
-}
-
-// Helper: Trigger browser download
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-

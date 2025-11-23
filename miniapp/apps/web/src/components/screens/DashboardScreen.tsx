@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { formatUnits } from "viem";
 import { cn } from "@/lib/utils";
 import type { User } from "@/hooks/useUser";
 import { ERC20_ABI } from "@/abi/ERC20";
+import { createClient } from "@/utils/supabase/client";
 
 interface DashboardScreenProps {
   user: User | null;
@@ -25,6 +26,11 @@ function truncateAddress(address: string): string {
 
 export function DashboardScreen({ user, loading, onStartTask, onClaim }: DashboardScreenProps) {
   const { address } = useAccount();
+  const [userInfo, setUserInfo] = useState<{
+    country: string | null;
+    age: number | null;
+    verified: boolean;
+  }>({ country: null, age: null, verified: false });
   
   // Fetch real cUSD Balance from blockchain
   const { data: cusdBalance } = useReadContract({
@@ -33,6 +39,34 @@ export function DashboardScreen({ user, loading, onStartTask, onClaim }: Dashboa
     functionName: "balanceOf",
     args: address ? [address] : undefined,
   });
+
+  // Fetch user verification info from Supabase
+  useEffect(() => {
+    async function fetchUserInfo() {
+      if (!address) return;
+      
+      try {
+        const supabase = createClient();
+        const { data: userData } = await supabase
+          .from('users')
+          .select('country, age, verified')
+          .eq('address', address.toLowerCase())
+          .single();
+
+        if (userData) {
+          setUserInfo({
+            country: userData.country,
+            age: userData.age,
+            verified: userData.verified || false,
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch user info:', err);
+      }
+    }
+
+    fetchUserInfo();
+  }, [address]);
 
   // Use real wallet balance, not Supabase balance
   const balance = cusdBalance ? parseFloat(formatUnits(cusdBalance as bigint, 18)) : 0;
@@ -81,6 +115,31 @@ export function DashboardScreen({ user, loading, onStartTask, onClaim }: Dashboa
                 </div>
             </div>
         </div>
+
+        {/* Self Verification Info */}
+        {userInfo.verified && (userInfo.country || userInfo.age) && (
+          <div className="bg-green-500/20 p-3 rounded-xl border border-green-500/40 backdrop-blur-sm mt-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-celo-sand text-xs uppercase font-bold flex items-center gap-1">
+                ✅ Verified Identity
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {userInfo.country && (
+                <div>
+                  <p className="text-celo-sand/70 text-xs">Country</p>
+                  <p className="text-white font-bold">{userInfo.country} 🌍</p>
+                </div>
+              )}
+              {userInfo.age && (
+                <div>
+                  <p className="text-celo-sand/70 text-xs">Age</p>
+                  <p className="text-white font-bold">{userInfo.age} years</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Content */}

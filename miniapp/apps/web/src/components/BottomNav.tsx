@@ -15,8 +15,8 @@ export function BottomNav({ currentTab, onSwitch }: BottomNavProps) {
                     currentTab === "dashboard" ? "bg-celo-purple/10 text-celo-purple" : "text-gray-400 hover:bg-gray-100"
                 )}
             >
-                <span className="text-xl">🏠</span>
-                <span className="text-[10px] font-bold uppercase tracking-wider">Dashboard</span>
+                <span className="text-xl">✏️</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider">Annotate</span>
             </button>
             
             <button 
@@ -27,7 +27,7 @@ export function BottomNav({ currentTab, onSwitch }: BottomNavProps) {
                 )}
             >
                 <span className="text-xl">📊</span>
-                <span className="text-[10px] font-bold uppercase tracking-wider">Profile</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider">Curate</span>
             </button>
             
             <button 
