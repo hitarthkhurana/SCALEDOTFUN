@@ -5,6 +5,7 @@ import { z } from "zod";
 export const env = createEnv({
   server: {
     JWT_SECRET: z.string().min(1).optional().default("build-time-placeholder"),
+    SECRET_CURATOR_PK: z.string().min(1).optional(),
   },
   client: {
     NEXT_PUBLIC_URL: z.string().min(1).optional().default("http://localhost:3000"),

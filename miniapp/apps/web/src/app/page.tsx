@@ -72,12 +72,9 @@ export default function Home() {
   };
 
   const handleClaim = () => {
-    console.log("[Home] 🎁 Handling claim:", { 
-      optimisticBalance,
-      userBalance: user?.cusdc_balance 
-    });
-    // TODO: Implement actual claiming logic with database update
-    // For now, just navigate - claiming logic will be implemented later
+    console.log("[Home] 🎁 Handling claim - refreshing user data");
+    // Refetch user data to get updated balance (should be 0 after claim)
+    refetch();
   };
 
   const handleUploadToMarketplace = (dataset: any) => {
