@@ -1,5 +1,5 @@
 import { useState, useRef, ChangeEvent } from "react";
-import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import { useAccount, usePublicClient, useWriteContract, useReadContract } from "wagmi";
 import { parseUnits, maxUint256, formatUnits, decodeEventLog } from "viem";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
@@ -32,6 +32,16 @@ export function LaunchDatasetScreen({ onBack }: LaunchDatasetScreenProps) {
   const { address } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+
+  // Fetch cUSD Balance
+  const { data: cusdBalance } = useReadContract({
+    address: CUSD_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+  });
+
+  const formattedBalance = cusdBalance ? formatUnits(cusdBalance as bigint, 18) : "0.00";
 
   // Pay per task calculation
   // Formula: cUSD amount / (# files * min annotations)
@@ -89,6 +99,27 @@ export function LaunchDatasetScreen({ onBack }: LaunchDatasetScreenProps) {
     try {
         const supabase = createClient();
 
+        // 0. Ensure User Exists
+        // If user is launching, they might be new. Check & Insert if needed.
+        const { data: existingUser } = await supabase
+            .from("users")
+            .select("address")
+            .eq("address", address.toLowerCase())
+            .single();
+
+        if (!existingUser) {
+            setLaunchStatus("Creating user profile...");
+            const { error: createUserError } = await supabase.from("users").insert({
+                address: address.toLowerCase(),
+                cusdc_balance: 0,
+                streak: 0,
+                total_earnings: 0,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            });
+            if (createUserError) throw new Error(`Failed to create user: ${createUserError.message}`);
+        }
+
         // 1. Upload Files
         setLaunchStatus("Uploading files to Storage...");
         const uploadedFiles: { url: string, type: 'text'|'audio'|'image' }[] = [];
@@ -117,15 +148,12 @@ export function LaunchDatasetScreen({ onBack }: LaunchDatasetScreenProps) {
         const totalBountyWei = parseUnits(bounty, 18);
         
         const approveTx = await writeContractAsync({
-            address: CUSD_ADDRESS, // Use real cUSD address
+            address: CUSD_ADDRESS, 
             abi: ERC20_ABI,
             functionName: 'approve',
             args: [DATA_ANNOTATE_ESCROW_ADDRESS, maxUint256],
-            // MiniPay requires feeCurrency for cUSD transactions if paying gas in cUSD,
-            // but 'approve' is a standard ERC20 call. 
-            // If paying for gas in cUSD, we might need extra params, but standard wagmi usually handles CELO gas.
-            // MiniPay documentation suggests native support via wagmi.
-        });
+            feeCurrency: CUSD_ADDRESS,
+        } as any); // Cast to any to bypass wagmi strict typing for feeCurrency
         
         setLaunchStatus("Waiting for approval confirmation...");
         await publicClient.waitForTransactionReceipt({ hash: approveTx });
@@ -147,8 +175,9 @@ export function LaunchDatasetScreen({ onBack }: LaunchDatasetScreenProps) {
                 address: DATA_ANNOTATE_ESCROW_ADDRESS,
                 abi: DATA_ANNOTATE_ESCROW_ABI,
                 functionName: 'createDataset',
-                args: [budgetPerFileWei, CURATOR_ADDRESS]
-            });
+                args: [budgetPerFileWei, CURATOR_ADDRESS],
+                feeCurrency: CUSD_ADDRESS,
+            } as any); // Cast to any to bypass wagmi strict typing for feeCurrency
             
             const receipt = await publicClient.waitForTransactionReceipt({ hash });
             
@@ -235,7 +264,8 @@ export function LaunchDatasetScreen({ onBack }: LaunchDatasetScreenProps) {
           abi: ERC20_ABI,
           functionName: 'approve',
           args: [DATA_ANNOTATE_ESCROW_ADDRESS, maxUint256],
-      });
+          feeCurrency: CUSD_ADDRESS,
+      } as any); // Cast to any to bypass wagmi strict typing for feeCurrency
       console.log("Debug Approve: TX Hash", approveTx);
       const receipt = await publicClient?.waitForTransactionReceipt({ hash: approveTx });
       console.log("Debug Approve: Receipt", receipt);
@@ -330,6 +360,9 @@ export function LaunchDatasetScreen({ onBack }: LaunchDatasetScreenProps) {
                         />
                         <span className="absolute right-3 top-2.5 font-bold text-gray-400">$</span>
                     </div>
+                    <p className="text-xs text-gray-500 mt-1 text-right">
+                        Balance: <span className="font-bold font-mono">{Number(formattedBalance).toFixed(2)} cUSD</span>
+                    </p>
                 </div>
 
                 <div>
