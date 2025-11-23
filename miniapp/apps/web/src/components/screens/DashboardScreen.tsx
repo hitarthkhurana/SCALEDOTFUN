@@ -1,13 +1,29 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import type { User } from "@/hooks/useUser";
 
 interface DashboardScreenProps {
-  balance: number;
+  user: User | null;
+  loading?: boolean;
   onStartTask: () => void;
   onClaim: () => void;
 }
 
-export function DashboardScreen({ balance, onStartTask, onClaim }: DashboardScreenProps) {
+/**
+ * Truncate an Ethereum address to format: 0x1234...5678
+ */
+function truncateAddress(address: string): string {
+  if (!address) return "...";
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+export function DashboardScreen({ user, loading, onStartTask, onClaim }: DashboardScreenProps) {
+  // Extract values from user object with fallbacks
+  const balance = user?.cusdc_balance ?? 0;
+  const streak = user?.streak ?? 0;
+  const userAddress = user?.address;
+  const displayName = userAddress ? truncateAddress(userAddress) : "...";
+
   
   return (
     <div className="min-h-screen bg-celo-tan flex flex-col">
@@ -16,11 +32,11 @@ export function DashboardScreen({ balance, onStartTask, onClaim }: DashboardScre
         <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-2">
                  <div className="w-10 h-10 bg-celo-yellow rounded-full border-2 border-white overflow-hidden">
-                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Alex" alt="avatar" />
+                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${userAddress || 'default'}`} alt="avatar" />
                  </div>
                  <div>
                     <p className="text-xs text-celo-sand uppercase font-bold tracking-widest">Annotator</p>
-                    <p className="text-sm font-bold">@alex_latam</p>
+                    <p className="text-sm font-bold font-mono">{displayName}</p>
                  </div>
             </div>
             <button 
@@ -28,7 +44,9 @@ export function DashboardScreen({ balance, onStartTask, onClaim }: DashboardScre
                 className="bg-celo-forest px-3 py-1 rounded-full border border-celo-lime flex items-center gap-2 active:scale-95 transition-transform hover:bg-celo-forest/80"
             >
                 <span className="text-celo-yellow text-lg">🪙</span>
-                <span className="font-mono font-bold text-white">{balance.toFixed(2)}</span>
+                <span className="font-mono font-bold text-white">
+                  {loading ? "..." : balance.toFixed(2)}
+                </span>
             </button>
         </div>
 
@@ -41,7 +59,9 @@ export function DashboardScreen({ balance, onStartTask, onClaim }: DashboardScre
                 <p className="text-celo-sand text-xs uppercase font-bold mb-1">Daily Streak</p>
                 <div className="flex items-center gap-2">
                      <span className="text-3xl">🔥</span>
-                     <span className="text-3xl font-black text-celo-yellow italic">3</span>
+                     <span className="text-3xl font-black text-celo-yellow italic">
+                       {loading ? "..." : streak}
+                     </span>
                 </div>
             </div>
         </div>
@@ -121,7 +141,7 @@ export function DashboardScreen({ balance, onStartTask, onClaim }: DashboardScre
                     {[
                         { rank: 4, name: "@ana_maria", amount: "$156.50" },
                         { rank: 5, name: "@carlos_dev", amount: "$142.00" },
-                        { rank: 6, name: "@you", amount: balance.toFixed(2), isMe: true },
+                        { rank: 6, name: "@you", amount: `$${balance.toFixed(2)}`, isMe: true },
                     ].map((user) => (
                         <div key={user.rank} className={cn("flex items-center justify-between p-3", user.isMe && "bg-celo-yellow/20")}>
                             <div className="flex items-center gap-3">

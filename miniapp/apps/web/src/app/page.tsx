@@ -1,27 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { WelcomeScreen } from "@/components/screens/WelcomeScreen";
 import { VerificationScreen } from "@/components/screens/VerificationScreen";
 import { DashboardScreen } from "@/components/screens/DashboardScreen";
 import { FeedScreen } from "@/components/screens/FeedScreen";
 import { ClaimScreen } from "@/components/screens/ClaimScreen";
+import { useUser } from "@/hooks/useUser";
 
 export default function Home() {
   const [currentScreen, setCurrentScreen] = useState<"welcome" | "verification" | "dashboard" | "feed" | "claim">("welcome");
-  const [credits, setCredits] = useState(124.50); // Centralized balance state
+  const { user, loading, refetch } = useUser();
+  
+  // Mock balance for Feed and Claim screens (not connected to real database yet)
+  const [mockBalance, setMockBalance] = useState(124.50);
 
   const navigateTo = (screen: "welcome" | "verification" | "dashboard" | "feed" | "claim") => {
     setCurrentScreen(screen);
   };
 
   const handleEarn = (amount: number) => {
-    setCredits(prev => prev + amount);
+    // Update mock balance for now
+    // TODO: Implement actual earning logic with database update
+    console.log("User earned:", amount);
+    setMockBalance(prev => prev + amount);
   };
 
   const handleClaim = () => {
-    setCredits(0);
+    // Reset mock balance for now
+    // TODO: Implement actual claiming logic with database update
+    console.log("User claimed:", mockBalance);
+    setMockBalance(0);
   };
+
+  // Auto-refetch user data when screen changes to dashboard
+  useEffect(() => {
+    if (currentScreen === "dashboard") {
+      refetch();
+    }
+  }, [currentScreen, refetch]);
 
   return (
     <main className="min-h-screen bg-background">
@@ -35,7 +52,8 @@ export default function Home() {
 
       {currentScreen === "dashboard" && (
         <DashboardScreen 
-          balance={credits}
+          user={user}
+          loading={loading}
           onStartTask={() => navigateTo("feed")} 
           onClaim={() => navigateTo("claim")}
         />
@@ -43,7 +61,7 @@ export default function Home() {
 
       {currentScreen === "feed" && (
         <FeedScreen 
-          currentBalance={credits}
+          currentBalance={mockBalance}
           onEarn={handleEarn}
           onBack={() => navigateTo("dashboard")} 
         />
@@ -51,7 +69,7 @@ export default function Home() {
 
       {currentScreen === "claim" && (
         <ClaimScreen 
-          balance={credits}
+          balance={mockBalance}
           onBack={() => navigateTo("dashboard")}
           onClaim={handleClaim}
         />

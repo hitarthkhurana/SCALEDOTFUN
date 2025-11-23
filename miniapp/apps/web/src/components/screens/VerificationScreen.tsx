@@ -4,6 +4,8 @@ import { getUniversalLink } from "@selfxyz/core";
 import { ethers } from "ethers";
 import { SELF_CONFIG } from "@/config/self.config";
 import { parseSelfVerification } from "@/lib/parseSelfVerification";
+import { saveVerificationToSupabase } from "@/lib/saveVerificationToSupabase";
+import { useMiniApp } from "@/contexts/miniapp-context";
 
 // TypeScript declarations for MiniPay
 declare global {
@@ -26,6 +28,7 @@ interface VerificationResult {
   country: string;
   countryCode: string;
   matchedPool: string;
+  gender?: string;
 }
 
 // Contract ABI for reading verification data
@@ -92,6 +95,7 @@ async function readVerificationFromContract(userAddress?: string): Promise<Verif
               country: parsed.country,
               countryCode: parsed.countryCode,
               matchedPool: parsed.matchedPool,
+              gender: parsed.gender,
             };
           } else {
             console.log("⚠️ Verification is OLD, waiting for new one...", {
@@ -134,6 +138,7 @@ async function readVerificationFromContract(userAddress?: string): Promise<Verif
         country: parsed.country,
         countryCode: parsed.countryCode,
         matchedPool: parsed.matchedPool,
+        gender: parsed.gender,
       };
     } catch (err) {
       console.error("❌ Both methods failed:", err);
@@ -150,6 +155,7 @@ export function VerificationScreen({ onComplete }: VerificationScreenProps) {
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
   const [pollAttempts, setPollAttempts] = useState(0);
   const [userWalletAddress, setUserWalletAddress] = useState<string>("");
+  const { context } = useMiniApp();
   // Steps: 0=Connect, 1=Proving, 2=Success/Results
   
   // Detect when user returns from Self app (manual return via app switcher)
@@ -251,10 +257,31 @@ export function VerificationScreen({ onComplete }: VerificationScreenProps) {
       };
     }
     
-    if (step === 2 && verificationResult) {
-        const timer = setTimeout(() => {
-            // TODO: Save verification result to Supabase here
-            // Example: await saveVerificationToSupabase(verificationResult);
+    if (step === 2 && verificationResult && userWalletAddress) {
+        const timer = setTimeout(async () => {
+            try {
+              // Get Farcaster FID from context if available
+              const farcasterFid = context?.user?.fid;
+              
+              console.log("💾 Saving verification to database...", {
+                walletAddress: userWalletAddress,
+                farcasterFid,
+                verificationResult
+              });
+              
+              // Save verification result to Supabase
+              await saveVerificationToSupabase(
+                userWalletAddress,
+                verificationResult,
+                farcasterFid
+              );
+              
+              console.log("✅ Verification saved successfully!");
+            } catch (error) {
+              console.error("❌ Failed to save verification to database:", error);
+              // Continue to dashboard anyway - don't block user
+            }
+            
             onComplete();
         }, 5000); // Allow time to read the results
         return () => clearTimeout(timer);
