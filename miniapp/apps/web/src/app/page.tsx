@@ -6,16 +6,21 @@ import { VerificationScreen } from "@/components/screens/VerificationScreen";
 import { DashboardScreen } from "@/components/screens/DashboardScreen";
 import { FeedScreen } from "@/components/screens/FeedScreen";
 import { ClaimScreen } from "@/components/screens/ClaimScreen";
+import { MarketplaceScreen } from "@/components/screens/MarketplaceScreen";
+import { LaunchDatasetScreen } from "@/components/screens/LaunchDatasetScreen";
+import { BottomNav } from "@/components/BottomNav";
 import { useUser } from "@/hooks/useUser";
 
+type Screen = "welcome" | "verification" | "dashboard" | "feed" | "claim" | "marketplace" | "launch-dataset";
+
 export default function Home() {
-  const [currentScreen, setCurrentScreen] = useState<"welcome" | "verification" | "dashboard" | "feed" | "claim">("welcome");
+  const [currentScreen, setCurrentScreen] = useState<Screen>("welcome");
   const { user, loading, refetch } = useUser();
   
   // Mock balance for Feed and Claim screens (not connected to real database yet)
   const [mockBalance, setMockBalance] = useState(124.50);
 
-  const navigateTo = (screen: "welcome" | "verification" | "dashboard" | "feed" | "claim") => {
+  const navigateTo = (screen: Screen) => {
     setCurrentScreen(screen);
   };
 
@@ -40,8 +45,11 @@ export default function Home() {
     }
   }, [currentScreen, refetch]);
 
+  // Show BottomNav only on main tabs
+  const showBottomNav = currentScreen === "dashboard" || currentScreen === "marketplace";
+
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-background pb-safe-area">
       {currentScreen === "welcome" && (
         <WelcomeScreen onStart={() => navigateTo("verification")} />
       )}
@@ -72,6 +80,25 @@ export default function Home() {
           balance={mockBalance}
           onBack={() => navigateTo("dashboard")}
           onClaim={handleClaim}
+        />
+      )}
+
+      {currentScreen === "marketplace" && (
+        <MarketplaceScreen 
+            onLaunch={() => navigateTo("launch-dataset")}
+        />
+      )}
+
+      {currentScreen === "launch-dataset" && (
+        <LaunchDatasetScreen 
+            onBack={() => navigateTo("marketplace")}
+        />
+      )}
+
+      {showBottomNav && (
+        <BottomNav 
+            currentTab={currentScreen as "dashboard" | "marketplace"} 
+            onSwitch={(tab) => navigateTo(tab)} 
         />
       )}
     </main>
