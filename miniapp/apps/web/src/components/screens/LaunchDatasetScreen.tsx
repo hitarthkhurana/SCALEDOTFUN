@@ -47,23 +47,18 @@ const COUNTRIES = [
   "Argentina",
   "Colombia",
   "Chile",
-  "Nigeria",
-  "South Africa",
-  "Kenya",
-  "Egypt",
-  "Morocco",
-  "India",
-  "Argentina",
-  "Brazil",
-  "Mexico",
-  "Chile",
-  "Colombia",
   "Peru",
   "Venezuela",
   "Ecuador",
   "Uruguay",
   "Paraguay",
   "Bolivia",
+  "Nigeria",
+  "South Africa",
+  "Kenya",
+  "Egypt",
+  "Morocco",
+  "Other"
 ];
 
 interface LaunchDatasetScreenProps {
@@ -301,34 +296,34 @@ export function LaunchDatasetScreen({ onBack }: LaunchDatasetScreenProps) {
 
       const datasetId = (decoded.args as any).datasetId;
 
-      // 4. Insert All Files to DB with Same Dataset ID
+      // 4. Insert All Files to DB with Same On-Chain Dataset ID
+      setLaunchStatus(`Saving ${uploadedFiles.length} files to database...`);
+      
       const payoutPerAnnotation = parseFloat(
         formatUnits(totalBountyWei / BigInt(totalTasks), 18)
       );
 
-      for (let i = 0; i < uploadedFiles.length; i++) {
-        setLaunchStatus(`Saving file ${i + 1}/${files.length} to database...`);
-        const fileData = uploadedFiles[i];
+      // Prepare all records for batch insert
+      const datasetRecords = uploadedFiles.map(fileData => ({
+        on_chain_dataset_id: Number(datasetId),
+        funder_address: normalizedAddress,
+        curator_address: CURATOR_ADDRESS.toLowerCase(),
+        file_url: fileData.url,
+        file_type: fileData.type,
+        task: task,
+        annotations: 0,
+        minimum_annotations: minAnnotationsNum,
+        cusdc_payout_per_annotation: payoutPerAnnotation,
+        allowed_countries: allowedCountries,
+        active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }));
 
-        // DB Insert - Each file gets same dataset_id
-        const { error: dbError } = await supabase.from("datasets").insert({
-          dataset_id: Number(datasetId),
-          funder_address: normalizedAddress,
-          curator_address: CURATOR_ADDRESS.toLowerCase(),
-          file_url: fileData.url,
-          file_type: fileData.type,
-          task: task,
-          annotations: 0,
-          minimum_annotations: minAnnotationsNum,
-          cusdc_payout_per_annotation: payoutPerAnnotation,
-          allowed_countries: [],
-          active: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
+      // Batch insert all records at once
+      const { error: dbError } = await supabase.from("datasets").insert(datasetRecords);
 
-        if (dbError) throw new Error(`DB Insert failed: ${dbError.message}`);
-      }
+      if (dbError) throw new Error(`DB Insert failed: ${dbError.message}`);
 
       setLaunchStatus("Success!");
       setTimeout(onBack, 1000);
