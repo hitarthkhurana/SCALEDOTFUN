@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { useAccount } from "wagmi";
 import { cn } from "@/lib/utils";
 import type { User } from "@/hooks/useUser";
@@ -22,11 +21,6 @@ function truncateAddress(address: string): string {
 
 export function DashboardScreen({ user, loading, onStartTask, onClaim }: DashboardScreenProps) {
   const { address } = useAccount();
-  const [userInfo, setUserInfo] = useState<{
-    country: string | null;
-    age: number | null;
-    verified: boolean;
-  }>({ country: null, age: null, verified: false });
   
   console.log("[DashboardScreen] 🎯 Rendering with:", { 
     user: user?.address, 
@@ -102,8 +96,7 @@ export function DashboardScreen({ user, loading, onStartTask, onClaim }: Dashboa
             </div>
         </div>
 
-        {/* Self Verification Info */}
-        {userInfo.verified && (userInfo.country || userInfo.age) && (
+        {user?.verified && (user?.country || user?.age) && (
           <div className="bg-green-500/20 p-3 rounded-xl border border-green-500/40 backdrop-blur-sm mt-3">
             <div className="flex items-center justify-between mb-2">
               <p className="text-celo-sand text-xs uppercase font-bold flex items-center gap-1">
@@ -111,16 +104,16 @@ export function DashboardScreen({ user, loading, onStartTask, onClaim }: Dashboa
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              {userInfo.country && (
+              {user?.country && (
                 <div>
                   <p className="text-celo-sand/70 text-xs">Country</p>
-                  <p className="text-white font-bold">{userInfo.country} 🌍</p>
+                  <p className="text-white font-bold">{user.country} 🌍</p>
                 </div>
               )}
-              {userInfo.age && (
+              {user?.age && (
                 <div>
                   <p className="text-celo-sand/70 text-xs">Age</p>
-                  <p className="text-white font-bold">{userInfo.age} years</p>
+                  <p className="text-white font-bold">{user.age} years</p>
                 </div>
               )}
             </div>
@@ -141,6 +134,7 @@ export function DashboardScreen({ user, loading, onStartTask, onClaim }: Dashboa
                 color="bg-celo-blue" 
                 count={datasetsLoading ? null : taskCounts.audio} 
                 onClick={() => onStartTask("audio")}
+                countryCode={user?.country}
             />
              <CategoryCard 
                 title="Text Labeling" 
@@ -149,6 +143,7 @@ export function DashboardScreen({ user, loading, onStartTask, onClaim }: Dashboa
                 color="bg-celo-orange" 
                 count={datasetsLoading ? null : taskCounts.text} 
                 onClick={() => onStartTask("text")}
+                countryCode={user?.country}
             />
              <CategoryCard 
                 title="Image Labeling" 
@@ -157,6 +152,7 @@ export function DashboardScreen({ user, loading, onStartTask, onClaim }: Dashboa
                 color="bg-celo-pink" 
                 count={datasetsLoading ? null : taskCounts.image} 
                 onClick={() => onStartTask("image")}
+                countryCode={user?.country}
             />
         </div>
 
@@ -225,7 +221,7 @@ export function DashboardScreen({ user, loading, onStartTask, onClaim }: Dashboa
   );
 }
 
-function CategoryCard({ title, reward, icon, color, count, disabled, onClick }: any) {
+function CategoryCard({ title, reward, icon, color, count, disabled, onClick, countryCode }: any) {
     const isLoading = count === null;
     const hasNoTasks = count === 0;
     
@@ -250,6 +246,11 @@ function CategoryCard({ title, reward, icon, color, count, disabled, onClick }: 
                 ${disabled || hasNoTasks || isLoading ? 'opacity-50 bg-gray-200 cursor-not-allowed' : 'bg-white hover:translate-x-1 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000]'}
             `}
         >
+            {countryCode && (
+                 <div className="absolute -top-3 right-4 bg-celo-yellow border-2 border-black px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] rotate-2 z-10">
+                    {countryCode}, 21+ Only
+                </div>
+            )}
             <div className={`w-16 h-16 ${color} flex items-center justify-center text-3xl border-2 border-black`}>
                 {icon}
             </div>

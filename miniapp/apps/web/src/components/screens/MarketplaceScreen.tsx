@@ -195,14 +195,14 @@ export function MarketplaceScreen({ onLaunch }: MarketplaceScreenProps) {
       {/* Header */}
       <div className="bg-celo-purple text-white p-6 rounded-b-[2rem] shadow-lg z-10">
         <div className="flex justify-between items-center mb-4">
-          <div>
+          <div className="flex-1">
             <h2 className="text-headline text-3xl text-celo-yellow">Marketplace</h2>
-            <p className="text-sm font-mono text-celo-sand">Buy & Sell Labeled Datasets 🚀</p>
+            <p className="text-sm font-mono text-celo-sand">Trade Labeled Datasets</p>
           </div>
           {/* Launch Button */}
           <button
             onClick={onLaunch}
-            className="bg-celo-yellow text-celo-purple font-bold px-4 py-2 rounded-full border-2 border-white shadow-[4px_4px_0px_0px_#ffffff] active:translate-y-1 active:shadow-none transition-all"
+            className="bg-celo-yellow text-celo-purple font-bold px-4 py-2 rounded-full border-2 border-white shadow-[4px_4px_0px_0px_#ffffff] active:translate-y-1 active:shadow-none transition-all animate-[shake_3s_ease-in-out_infinite] whitespace-nowrap ml-4"
           >
             + Launch
           </button>
