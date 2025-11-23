@@ -1,13 +1,13 @@
-# SCALE.FUN 🚀
+# Scale.fun 🏷️
 
-**Decentralized AI Data Labeling Platform**
+**Decentralized AI Data Labeling Marketplace**
 
-Connect AI Labs needing labeled data with a ZK-verified workforce earning crypto on mobile. Workers complete micro-tasks, earn instant cUSD payouts, and AI Labs can sell completed datasets on a decentralized marketplace powered by Filecoin.
+Connect AI Labs needing labeled training data with a global, crypto-incentivized workforce on mobile. Workers complete micro-labeling tasks and earn instant cUSD. Completed datasets are permanently stored on Filecoin and sold on a decentralized marketplace.
 
-**Built for:**
-- 🟣 **Celo**: Mobile-first payments with cUSD
-- 🔐 **Self Protocol**: ZK-verified identity (age, country) for task gating
-- 💾 **Filecoin**: Decentralized storage for datasets with fast retrieval
+**🎯 Prize Tracks:**
+- 🟣 **Celo**: Mobile-first payments with real cUSD on Mainnet
+- 🔐 **Self Protocol**: ZK-verified identity for region and age-specific labeling
+- 💾 **Filecoin**: Decentralized dataset storage on Calibration Testnet with fast retrieval
 
 ## 🚀 Deployed Contracts
 
@@ -95,7 +95,7 @@ cp apps/web/.env.example apps/web/.env.local
 pnpm dev
 ```
 
-### 4. Filecoin Integration
+### 4. Filecoin Integration (Calibration Testnet)
 
 ```bash
 cd filecoin
@@ -103,12 +103,24 @@ cd filecoin
 # Install dependencies
 npm install
 
-# Upload dataset to Filecoin
-npm run upload-dataset
+# Set up .env with PRIVATE_KEY
+
+# Quick demo upload (2 files)
+npm run quick
 
 # Retrieve from Filecoin (fast!)
 npm run retrieve
+
+# View uploaded CIDs
+cat demo-cids.json
 ```
+
+**Calibration Testnet Details:**
+- **Network**: Filecoin Calibration Testnet (314159)
+- **RPC**: `RPC_URLS.calibration.http` via Synapse SDK
+- **Explorer**: https://calibration.filfox.info/en
+- **Upload Speed**: 60-90 seconds per file
+- **Retrieval Speed**: 3-5 seconds per file
 
 ### 5. Supabase Setup
 
@@ -121,26 +133,34 @@ npm run retrieve
 
 ## 💡 Features
 
-### For Workers (Celo MiniApp)
-- 📱 **Mobile-First**: Optimized for MiniPay wallet
-- 🔐 **ZK Verification**: Self Protocol for age/country gating
-- 💰 **Instant Payouts**: Earn cUSD for micro-tasks
-- 🎯 **Multiple Task Types**: Bounding boxes, audio transcription, text labeling
-- 🔥 **Gamification**: Daily streaks, leaderboards
+### For Workers (MiniApp - Annotate Tab)
+- 📱 **Mobile-First**: Optimized for MiniPay wallet on Celo
+- 🔐 **ZK Verification**: Self Protocol for age/country gating (enables region-specific tasks)
+- 💰 **Instant Payouts**: Earn cUSD for each completed annotation
+- 🎯 **Multiple Task Types**: Image labeling, audio transcription, text classification
+- 📊 **Leaderboard**: Track your ranking and earnings
 
-### For AI Labs (Launchpad)
-- 📊 **Launch Datasets**: Upload data, set bounties, deploy to blockchain
-- 👥 **Worker Marketplace**: Access verified global workforce
-- 📦 **Dataset Marketplace**: Sell completed labeled datasets
-- 💾 **Filecoin Storage**: Decentralized, immutable dataset storage
-- 📈 **Real-Time Analytics**: Track completion progress
+### For Curators (MiniApp - Curate Tab)
+- 📊 **Launch Datasets**: Upload raw data, set bounties per annotation
+- 👁️ **Track Progress**: Real-time completion status for each dataset
+- 🚀 **Upload to Filecoin**: One-click background upload when dataset is 100% labeled
+- 🛒 **List on Marketplace**: Set price and sell completed labeled datasets
+- 💵 **Sales History**: View all buyers and earnings from sold datasets
+
+### For Buyers (MiniApp - Market Tab)
+- 🛒 **Browse Datasets**: Discover labeled training data for AI models
+- 💳 **Buy with cUSD**: Pay with cUSD (85% to curator, 15% platform fee)
+- 📥 **Instant Download**: Retrieve files directly from Filecoin in seconds
+- 📂 **Gallery View**: Scroll through all images and annotations in one view
+- 💾 **Save to Device**: Download individual files to your phone
 
 ### Technical Features
-- **Escrow System**: Secure on-chain payments via `DataAnnotateEscrow`
-- **Marketplace Contract**: Buy/sell datasets with 15% platform fee
-- **Filecoin Integration**: Synapse SDK for fast upload/retrieval
-- **Supabase Backend**: Real-time database for annotations
-- **Smart Contract Payments**: Automated distribution to workers
+- **Escrow System**: Secure on-chain worker payments via `DataAnnotateEscrow`
+- **Marketplace Contract**: Decentralized buy/sell with 15% platform fee
+- **Hybrid Storage**: Supabase for active datasets → Filecoin for completed datasets
+- **Filecoin Integration**: Synapse SDK for upload to Calibration Testnet + fast retrieval
+- **Background Uploads**: Filecoin uploads run in background (60-90s per file)
+- **Smart Contract Verification**: DataAnnotateEscrow verified on CeloScan
 
 ### Contract Interaction Examples (Mainnet)
 
@@ -229,64 +249,87 @@ forge test --gas-report
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      SCALE.FUN Platform                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌─────────────────┐         ┌─────────────────┐            │
-│  │  Workers (Mobile)│         │  AI Labs (Web)  │            │
-│  │   - MiniPay      │         │  - Launch Data  │            │
-│  │   - Self Protocol│         │  - Set Bounties │            │
-│  │   - Earn cUSD    │         │  - Track Progress│           │
-│  └────────┬─────────┘         └────────┬────────┘            │
-│           │                            │                      │
-│           ▼                            ▼                      │
-│  ┌──────────────────────────────────────────────┐            │
-│  │         Supabase (Database)                  │            │
-│  │  - User profiles  - Datasets  - Annotations  │            │
-│  └──────────────────┬───────────────────────────┘            │
-│                     │                                         │
-│                     ▼                                         │
-│  ┌──────────────────────────────────────────────┐            │
-│  │      Celo Blockchain (Mainnet) ✅            │            │
-│  │  - Real cUSD Token (0x765D...)               │            │
-│  │  - DataAnnotateEscrow (0x704E...) VERIFIED   │            │
-│  │  - DatasetMarketplace (0x2cC8...)            │            │
-│  │  📄 https://celoscan.io                      │            │
-│  └──────────────────┬───────────────────────────┘            │
-│                     │                                         │
-│                     ▼                                         │
-│  ┌──────────────────────────────────────────────┐            │
-│  │       Filecoin (Decentralized Storage)       │            │
-│  │  - Raw datasets  - Labeled datasets          │            │
-│  │  - Fast retrieval via Synapse SDK            │            │
-│  └──────────────────────────────────────────────┘            │
-│                                                               │
-└───────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                     ScaleDotFun Platform                          │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐               │
+│  │   Workers   │  │  Curators   │  │   Buyers    │               │
+│  │  (Annotate) │  │   (Curate)  │  │  (Market)   │               │
+│  │  - MiniPay  │  │ - Launch    │  │ - Browse    │               │
+│  │  - Self ZK  │  │ - Track     │  │ - Purchase  │               │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘               │
+│         │                │                │                        │
+│         └────────────────┼────────────────┘                        │
+│                          ▼                                         │
+│         ┌────────────────────────────────────┐                    │
+│         │  Supabase (Centralized Storage)    │                    │
+│         │  - User profiles & verification    │                    │
+│         │  - Active datasets & annotations   │                    │
+│         │  - Marketplace listings & purchases│                    │
+│         │  - Raw files (work-in-progress)    │                    │
+│         └────────────┬───────────────────────┘                    │
+│                      │                                             │
+│         ┌────────────┼────────────┐                               │
+│         ▼            ▼            ▼                               │
+│  ┌───────────┐ ┌──────────┐ ┌─────────────────────┐              │
+│  │   Celo    │ │   Self   │ │     Filecoin        │              │
+│  │  Mainnet  │ │ Protocol │ │ Calibration Testnet │              │
+│  │           │ │          │ │                     │              │
+│  │ • cUSD    │ │ • ZK Age │ │ • Completed datasets│              │
+│  │ • Escrow  │ │ • Country│ │ • Synapse SDK       │              │
+│  │ • Market  │ │          │ │ • Fast retrieval    │              │
+│  └───────────┘ └──────────┘ └─────────────────────┘              │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+
+Data Flow:
+1. Curator uploads → Supabase Storage (fast, cheap, editable)
+2. Workers annotate → Supabase DB (real-time updates)
+3. 100% complete → Background upload to Filecoin (permanent, immutable)
+4. Listed on marketplace → Buyers download from Filecoin (decentralized)
 ```
+
+## 🔄 Hybrid Storage Strategy
+
+**Why Supabase + Filecoin?**
+
+| Phase | Storage | Reason |
+|-------|---------|--------|
+| **Raw Upload** | Supabase | Fast access for workers, cheap, can delete if bad quality |
+| **Annotation** | Supabase DB | Real-time updates, easy querying, mutable |
+| **Completion** | Filecoin | Permanent record, decentralized, immutable, provenance |
+| **Marketplace** | Filecoin CIDs | Buyers trust decentralized storage, always accessible |
+
+Think of it like **draft documents** (Supabase) vs **published books** (Filecoin).
 
 ## 🛤️ User Flows
 
-### Worker Flow
+### 👷 Worker Flow (Annotate Tab)
 1. Connect MiniPay wallet
-2. Verify identity via Self Protocol (ZK proof)
-3. Browse available tasks (filtered by verification)
-4. Complete micro-tasks (label images, transcribe audio)
-5. Earn instant cUSD payouts per task
+2. **Verify identity** via Self Protocol ZK proof (nationality + age)
+3. Browse **active datasets** filtered by your verification
+4. Complete micro-tasks: label images, classify text, transcribe audio
+5. Earn instant **cUSD payouts** per annotation (tracked in leaderboard)
 
-### AI Lab Flow
-1. Launch dataset (upload files, set bounty)
-2. Smart contract locks funds in escrow
-3. Workers complete annotations
-4. Track progress in real-time
-5. When 100% complete → Upload to Filecoin
-6. List on marketplace for sale
+### 📊 Curator Flow (Curate Tab)
+1. **Upload dataset**: Upload raw files to Supabase, set bounty per annotation
+2. **Smart contract** locks cUSD funds in `DataAnnotateEscrow`
+3. Workers complete annotations (stored in Supabase)
+4. Track **real-time progress** (% complete)
+5. When **100% complete** → Click "Upload to Filecoin"
+   - Background API uploads all files + annotations to **Filecoin Calibration Testnet**
+   - Each file gets a unique **CID** (Content Identifier)
+6. Click "List on Marketplace" → Set price, deploy to `DatasetMarketplace` contract
+7. View **sales history** and earnings from buyers
 
-### Buyer Flow
-1. Browse marketplace for labeled datasets
-2. Purchase with cUSD (85% to creator, 15% platform fee)
-3. Receive Filecoin CIDs
-4. Download datasets directly from Filecoin
+### 🛒 Buyer Flow (Market Tab)
+1. Browse **marketplace listings** for labeled datasets
+2. Click "Buy Now" → Approve cUSD, call `buyDataset()` on contract
+   - 85% to curator, 15% to platform
+3. Click "Download Dataset" → Fetches all files from Filecoin
+4. **Gallery view**: Scroll through all images + annotations
+5. **Save to device**: Download individual files to phone
 
 
 ### Environment Variables
@@ -374,25 +417,47 @@ Real cUSD address: `0x765DE816845861e75A25fCA122bb6898B8B1282a`
 
 ## 🎯 Prize Tracks
 
-This project is built for:
+### 🟣 Celo Track
+**What we built:**
+- ✅ **Deployed on Celo Mainnet** with real cUSD (`0x765DE816845861e75A25fCA122bb6898B8B1282a`)
+- ✅ **Verified Contract** on CeloScan: [DataAnnotateEscrow](https://celoscan.io/address/0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0)
+- ✅ **Mobile-first MiniApp** optimized for MiniPay wallet
+- ✅ **Two smart contracts**: Worker escrow + Dataset marketplace
+- ✅ **Real transactions**: Workers earn real cUSD, datasets sold for real cUSD
 
-1. **🟣 Celo Track**
-   - ✅ **Deployed on Celo Mainnet** with real cUSD
-   - ✅ **Verified Contract** on CeloScan
-   - Mobile-first payments with cUSD
-   - MiniPay wallet integration
-   - Instant worker payouts via smart contracts
+**Impact:**
+Mobile workers in emerging markets can earn stable crypto by labeling AI training data.
 
-2. **🔐 Self Protocol Track**
-   - ZK-verified identity for task gating
-   - Age and country verification
-   - Privacy-preserving worker credentials
+### 🔐 Self Protocol Track
+**What we built:**
+- ✅ **ZK-verified identity** for nationality and date of birth
+- ✅ **Task gating** based on verification (e.g., "US residents 18+" for content moderation)
+- ✅ **Privacy-preserving**: Worker credentials verified on-chain without exposing PII
+- ✅ **Integrated with dashboard**: Verification status shown in UI
 
-3. **💾 Filecoin Track**
-   - Decentralized dataset storage
-   - Fast retrieval via Synapse SDK
-   - Marketplace delivery via Filecoin CIDs
-   - Immutable labeled datasets
+**Impact:**
+Enables region and age-specific data labeling requirements while preserving worker privacy.
+
+### 💾 Filecoin Track - Best Storage Innovation
+**What we built:**
+- ✅ **Synapse SDK integration** for upload and retrieval
+- ✅ **Calibration Testnet deployment**: All completed datasets stored on Filecoin
+- ✅ **Working demo**: Full MiniApp with background uploads and instant downloads
+- ✅ **Open-source**: Public GitHub repository
+
+**Storage Innovation:**
+- **Dataset Marketplace**: Buy/sell labeled AI training data stored on Filecoin
+- **Hybrid approach**: Centralized storage for work-in-progress → Filecoin for final products
+- **Background uploads**: 60-90s per file, runs async so users can continue working
+- **Fast retrieval**: 3-5 seconds per file download using Synapse SDK
+- **Gallery UI**: Mobile-friendly scrollable view of downloaded datasets
+- **Provenance**: Immutable CIDs prove dataset authenticity
+
+**Qualification Requirements:**
+1. ✅ Uses Synapse SDK meaningfully (storage + retrieval)
+2. ✅ Deploys to Filecoin Calibration Testnet (`RPC_URLS.calibration.http`)
+3. ✅ Working demo (full MiniApp frontend)
+4. ✅ Open-source GitHub repository
 
 ## 🤝 Contributing
 
