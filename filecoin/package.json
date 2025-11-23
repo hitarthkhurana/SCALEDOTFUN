@@ -9,8 +9,14 @@
     "upload": "tsx examples/upload.ts",
     "upload-batch": "tsx examples/upload-batch.ts",
     "retrieve": "tsx examples/retrieve.ts",
+    "view": "tsx examples/view-file.ts",
     "test": "tsx examples/test.ts",
-    "demo": "tsx examples/proxied-retrieval.ts"
+    "demo": "tsx examples/proxied-retrieval.ts",
+    "dataset": "tsx examples/upload-dataset.ts",
+    "demo:upload": "tsx examples/demo-upload.ts",
+    "quick": "tsx examples/quick-demo.ts",
+    "lit:encrypt": "tsx examples/lit-encrypt-upload.ts",
+    "lit:decrypt": "tsx examples/lit-decrypt-download.ts"
   },
   "keywords": [
     "filecoin",
@@ -22,6 +28,9 @@
   "license": "MIT",
   "dependencies": {
     "@filoz/synapse-sdk": "latest",
+    "@lit-protocol/auth-helpers": "^8.1.1",
+    "@lit-protocol/constants": "^8.0.8",
+    "@lit-protocol/lit-node-client": "^7.3.1",
     "dotenv": "^16.4.5"
   },
   "devDependencies": {
