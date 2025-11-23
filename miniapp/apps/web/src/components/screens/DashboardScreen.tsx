@@ -1,6 +1,9 @@
 import { useState } from "react";
+import { useAccount, useReadContract } from "wagmi";
+import { formatUnits } from "viem";
 import { cn } from "@/lib/utils";
 import type { User } from "@/hooks/useUser";
+import { ERC20_ABI } from "@/abi/ERC20";
 
 interface DashboardScreenProps {
   user: User | null;
@@ -8,6 +11,9 @@ interface DashboardScreenProps {
   onStartTask: () => void;
   onClaim: () => void;
 }
+
+// Mainnet cUSD Address
+const CUSD_ADDRESS = "0x765DE816845861e75A25fCA122bb6898B8B1282a";
 
 /**
  * Truncate an Ethereum address to format: 0x1234...5678
@@ -18,10 +24,20 @@ function truncateAddress(address: string): string {
 }
 
 export function DashboardScreen({ user, loading, onStartTask, onClaim }: DashboardScreenProps) {
-  // Extract values from user object with fallbacks
-  const balance = user?.cusdc_balance ?? 0;
+  const { address } = useAccount();
+  
+  // Fetch real cUSD Balance from blockchain
+  const { data: cusdBalance } = useReadContract({
+    address: CUSD_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+  });
+
+  // Use real wallet balance, not Supabase balance
+  const balance = cusdBalance ? parseFloat(formatUnits(cusdBalance as bigint, 18)) : 0;
   const streak = user?.streak ?? 0;
-  const userAddress = user?.address;
+  const userAddress = user?.address || address;
   const displayName = userAddress ? truncateAddress(userAddress) : "...";
 
   
@@ -141,16 +157,16 @@ export function DashboardScreen({ user, loading, onStartTask, onClaim }: Dashboa
                     {[
                         { rank: 4, name: "@ana_maria", amount: "$156.50" },
                         { rank: 5, name: "@carlos_dev", amount: "$142.00" },
-                        { rank: 6, name: "@you", amount: `$${balance.toFixed(2)}`, isMe: true },
-                    ].map((user) => (
-                        <div key={user.rank} className={cn("flex items-center justify-between p-3", user.isMe && "bg-celo-yellow/20")}>
+                        { rank: 6, name: "@you", amount: `$${(user?.cusdc_balance ?? 0).toFixed(2)}`, isMe: true },
+                    ].map((leaderboardUser) => (
+                        <div key={leaderboardUser.rank} className={cn("flex items-center justify-between p-3", leaderboardUser.isMe && "bg-celo-yellow/20")}>
                             <div className="flex items-center gap-3">
-                                <span className="font-mono font-bold text-gray-400 w-6">#{user.rank}</span>
-                                <span className={cn("font-bold text-sm", user.isMe ? "text-celo-forest" : "text-gray-700")}>
-                                    {user.name} {user.isMe && "(You)"}
+                                <span className="font-mono font-bold text-gray-400 w-6">#{leaderboardUser.rank}</span>
+                                <span className={cn("font-bold text-sm", leaderboardUser.isMe ? "text-celo-forest" : "text-gray-700")}>
+                                    {leaderboardUser.name} {leaderboardUser.isMe && "(You)"}
                                 </span>
                             </div>
-                            <span className="font-mono font-bold text-sm text-black">{user.amount}</span>
+                            <span className="font-mono font-bold text-sm text-black">{leaderboardUser.amount}</span>
                         </div>
                     ))}
                 </div>
