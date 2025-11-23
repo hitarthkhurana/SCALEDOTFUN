@@ -257,7 +257,7 @@ export function ClaimScreen({ balance, onBack, onClaim }: ClaimScreenProps) {
                   </>
                 ) : (
                   <>
-                    🔍 Debug: Check Balance Breakdown
+                    Check Balance Breakdown
                   </>
                 )}
               </button>
