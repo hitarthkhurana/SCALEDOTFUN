@@ -18,8 +18,8 @@ export const SELF_CONFIG = {
   // Logo (optional - can use base64 or URL)
   LOGO_URL: "https://i.postimg.cc/mrmVf9hm/self.png",
   
-  // Network
-  ENDPOINT_TYPE: "staging_celo" as const, // "staging_celo" for testnet, "celo" for mainnet
+  // Network - Celo Mainnet only
+  ENDPOINT_TYPE: "celo" as const,
   
   // Verification requirements (must match your contract!)
   DISCLOSURES: {
