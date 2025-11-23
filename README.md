@@ -11,19 +11,24 @@ Connect AI Labs needing labeled data with a ZK-verified workforce earning crypto
 
 ## 🚀 Deployed Contracts
 
-### Celo MAINNET (Production)
+### Celo MAINNET (Production) ✅
 
 | Contract | Address | Description |
 |----------|---------|-------------|
 | **Real cUSD** | `0x765DE816845861e75A25fCA122bb6898B8B1282a` | Official Celo USD stablecoin |
-| **DataAnnotateEscrow** | `TODO: Deploy to mainnet` | Escrow contract for data annotation payments |
-| **DatasetMarketplace** | `0x2cC8C36C09726519b676b0a19BB911873dAdF387` | ✅ Marketplace for buying/selling labeled datasets |
+| **DataAnnotateEscrow** | [`0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0`](https://celoscan.io/address/0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0) | ✅ **VERIFIED** - Escrow contract for worker payouts |
+| **DatasetMarketplace** | `0x2cC8C36C09726519b676b0a19BB911873dAdF387` | Marketplace for buying/selling labeled datasets |
 
 **Network Details:**
 - **Chain ID**: 42220
 - **RPC URL**: https://forno.celo.org
 - **Currency**: CELO (for gas)
 - **Block Explorer**: https://celoscan.io
+
+**Contract Verification:**
+- ✅ DataAnnotateEscrow is **verified on CeloScan** via Sourcify
+- 📄 [View Source Code](https://celoscan.io/address/0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0#code)
+- 🔍 [Sourcify Repository](https://repo.sourcify.dev/contracts/full_match/42220/0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0/)
 
 ### Testnet (Deprecated - Moving to Mainnet)
 
@@ -137,48 +142,52 @@ npm run retrieve
 - **Supabase Backend**: Real-time database for annotations
 - **Smart Contract Payments**: Automated distribution to workers
 
-## 📝 Contract Interaction
+### Contract Interaction Examples (Mainnet)
+
+**Using the deployed DataAnnotateEscrow contract:**
 
 ### Create a Dataset
 
 ```bash
-# Approve tokens
-cast send 0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0 \
+# Approve cUSD tokens for escrow contract
+cast send 0x765DE816845861e75A25fCA122bb6898B8B1282a \
   "approve(address,uint256)" \
-  0xA39faDa84249f557a32338eA4b3604780fB9274c \
-  1000000000000000000000 \
+  0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0 \
+  1000000 \
   --private-key <YOUR_PRIVATE_KEY> \
-  --rpc-url https://forno.celo-sepolia.celo-testnet.org
+  --rpc-url https://forno.celo.org
 
-# Create dataset
-cast send 0xA39faDa84249f557a32338eA4b3604780fB9274c \
+# Create dataset (amount in cUSD decimals: 18)
+cast send 0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0 \
   "createDataset(uint256,address)" \
-  1000000000000000000000 \
+  1000000000000000000 \
   <CURATOR_ADDRESS> \
   --private-key <YOUR_PRIVATE_KEY> \
-  --rpc-url https://forno.celo-sepolia.celo-testnet.org
+  --rpc-url https://forno.celo.org
 ```
 
 ### Distribute Funds (Curator Only)
 
 ```bash
-cast send 0xA39faDa84249f557a32338eA4b3604780fB9274c \
+cast send 0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0 \
   "distribute(uint256,address,uint256)" \
   0 \
   <USER_ADDRESS> \
-  100000000000000000000 \
+  100000000000000000 \
   --private-key <CURATOR_PRIVATE_KEY> \
-  --rpc-url https://forno.celo-sepolia.celo-testnet.org
+  --rpc-url https://forno.celo.org
 ```
 
-### Check Balance
+### Check cUSD Balance
 
 ```bash
-cast call 0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0 \
+cast call 0x765DE816845861e75A25fCA122bb6898B8B1282a \
   "balanceOf(address)(uint256)" \
   <ADDRESS> \
-  --rpc-url https://forno.celo-sepolia.celo-testnet.org
+  --rpc-url https://forno.celo.org
 ```
+
+**💡 Tip:** View the verified contract source code on [CeloScan](https://celoscan.io/address/0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0#code) to see all available functions.
 
 ## 🧪 Testing
 
@@ -239,10 +248,11 @@ forge test --gas-report
 │                     │                                         │
 │                     ▼                                         │
 │  ┌──────────────────────────────────────────────┐            │
-│  │      Celo Blockchain (Alfajores)             │            │
-│  │  - MockCUSD Token                            │            │
-│  │  - DataAnnotateEscrow (Worker Payouts)       │            │
-│  │  - DatasetMarketplace (Buy/Sell Datasets)    │            │
+│  │      Celo Blockchain (Mainnet) ✅            │            │
+│  │  - Real cUSD Token (0x765D...)               │            │
+│  │  - DataAnnotateEscrow (0x704E...) VERIFIED   │            │
+│  │  - DatasetMarketplace (0x2cC8...)            │            │
+│  │  📄 https://celoscan.io                      │            │
 │  └──────────────────┬───────────────────────────┘            │
 │                     │                                         │
 │                     ▼                                         │
@@ -303,7 +313,7 @@ PRIVATE_KEY=your_filecoin_key
 - ✅ Private key with CELO balance set in `contracts/.env`
 - ✅ Real cUSD for testing (address: `0x765DE816845861e75A25fCA122bb6898B8B1282a`)
 
-### Step 1: Deploy DataAnnotateEscrow (Worker Payout Contract)
+### Step 1: Deploy DataAnnotateEscrow (Worker Payout Contract) ✅ COMPLETED
 
 ```bash
 cd contracts
@@ -317,10 +327,23 @@ forge script script/DeployDataAnnotateEscrow.s.sol \
   --rpc-url https://forno.celo.org \
   --broadcast --legacy
 
-# ⚠️ SAVE THE DEPLOYED ADDRESS!
-# Update ESCROW_ADDRESS in:
-# - miniapp/apps/web/src/components/screens/LaunchDatasetScreen.tsx
+# Verify the contract on CeloScan
+forge verify-contract \
+  <DEPLOYED_ADDRESS> \
+  src/DataAnnotateEscrow.sol:DataAnnotateEscrow \
+  --chain-id 42220 \
+  --verifier sourcify
 ```
+
+**✅ Deployed & Verified:**
+- **Address:** `0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0`
+- **CeloScan:** https://celoscan.io/address/0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0
+- **Status:** Verified via Sourcify
+
+**Next Steps:**
+Update the escrow address in your frontend:
+- `miniapp/apps/web/src/components/screens/LaunchDatasetScreen.tsx`
+- `miniapp/apps/web/src/config/self.config.ts`
 
 ### Step 2: Deploy DatasetMarketplace (Buy/Sell Contract)
 
@@ -354,9 +377,11 @@ Real cUSD address: `0x765DE816845861e75A25fCA122bb6898B8B1282a`
 This project is built for:
 
 1. **🟣 Celo Track**
+   - ✅ **Deployed on Celo Mainnet** with real cUSD
+   - ✅ **Verified Contract** on CeloScan
    - Mobile-first payments with cUSD
    - MiniPay wallet integration
-   - Instant worker payouts on Celo Sepolia
+   - Instant worker payouts via smart contracts
 
 2. **🔐 Self Protocol Track**
    - ZK-verified identity for task gating

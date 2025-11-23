@@ -1,20 +1,16 @@
 import { useState, useEffect } from "react";
-import { useAccount, useReadContract } from "wagmi";
-import { formatUnits } from "viem";
+import { useAccount } from "wagmi";
 import { cn } from "@/lib/utils";
 import type { User } from "@/hooks/useUser";
-import { ERC20_ABI } from "@/abi/ERC20";
+import { useAvailableDatasets } from "@/hooks/useAvailableDatasets";
 import { createClient } from "@/utils/supabase/client";
 
 interface DashboardScreenProps {
   user: User | null;
   loading?: boolean;
-  onStartTask: () => void;
+  onStartTask: (taskType: "audio" | "text" | "image") => void;
   onClaim: () => void;
 }
-
-// Mainnet cUSD Address
-const CUSD_ADDRESS = "0x765DE816845861e75A25fCA122bb6898B8B1282a";
 
 /**
  * Truncate an Ethereum address to format: 0x1234...5678
@@ -32,48 +28,36 @@ export function DashboardScreen({ user, loading, onStartTask, onClaim }: Dashboa
     verified: boolean;
   }>({ country: null, age: null, verified: false });
   
-  // Fetch real cUSD Balance from blockchain
-  const { data: cusdBalance } = useReadContract({
-    address: CUSD_ADDRESS,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
+  console.log("[DashboardScreen] 🎯 Rendering with:", { 
+    user: user?.address, 
+    loading, 
+    userCountry: user?.country 
   });
-
-  // Fetch user verification info from Supabase
-  useEffect(() => {
-    async function fetchUserInfo() {
-      if (!address) return;
-      
-      try {
-        const supabase = createClient();
-        const { data: userData } = await supabase
-          .from('users')
-          .select('country, age, verified')
-          .eq('address', address.toLowerCase())
-          .single();
-
-        if (userData) {
-          setUserInfo({
-            country: userData.country,
-            age: userData.age,
-            verified: userData.verified || false,
-          });
-        }
-      } catch (err) {
-        console.error('Failed to fetch user info:', err);
-      }
-    }
-
-    fetchUserInfo();
-  }, [address]);
-
-  // Use real wallet balance, not Supabase balance
-  const balance = cusdBalance ? parseFloat(formatUnits(cusdBalance as bigint, 18)) : 0;
+  
+  // Fetch available datasets based on user's country and annotation history
+  const { taskCounts, loading: datasetsLoading } = useAvailableDatasets(user?.country, user?.address);
+  
+  console.log("[DashboardScreen] 📊 Task counts:", { 
+    taskCounts, 
+    datasetsLoading,
+    userCountry: user?.country 
+  });
+  
+  // Use Supabase balance (cusdc_balance from user)
+  const balance = user?.cusdc_balance ?? 0;
   const streak = user?.streak ?? 0;
   const userAddress = user?.address || address;
   const displayName = userAddress ? truncateAddress(userAddress) : "...";
 
+  // Calculate total available tasks
+  const totalTasks = taskCounts.audio + taskCounts.text + taskCounts.image;
+  
+  console.log("[DashboardScreen] 💰 User stats:", { 
+    balance, 
+    streak, 
+    totalTasks,
+    userAddress: displayName 
+  });
   
   return (
     <div className="min-h-screen bg-celo-tan flex flex-col">
@@ -95,7 +79,7 @@ export function DashboardScreen({ user, loading, onStartTask, onClaim }: Dashboa
             >
                 <span className="text-celo-yellow text-lg">🪙</span>
                 <span className="font-mono font-bold text-white">
-                  {loading ? "..." : balance.toFixed(2)}
+                  {loading ? "..." : balance.toFixed(4)}
                 </span>
             </button>
         </div>
@@ -103,7 +87,9 @@ export function DashboardScreen({ user, loading, onStartTask, onClaim }: Dashboa
         <div className="grid grid-cols-2 gap-4 mt-4">
             <div className="bg-white/10 p-4 rounded-xl border border-white/20 backdrop-blur-sm">
                 <p className="text-celo-sand text-xs uppercase font-bold mb-1">Tasks Available</p>
-                <p className="text-3xl font-bold text-celo-yellow">42</p>
+                <p className="text-3xl font-bold text-celo-yellow">
+                  {datasetsLoading ? "..." : totalTasks}
+                </p>
             </div>
             <div className="bg-white/10 p-4 rounded-xl border border-white/20 backdrop-blur-sm flex flex-col justify-between">
                 <p className="text-celo-sand text-xs uppercase font-bold mb-1">Daily Streak</p>
@@ -149,29 +135,28 @@ export function DashboardScreen({ user, loading, onStartTask, onClaim }: Dashboa
         
         <div className="grid grid-cols-1 gap-4">
             <CategoryCard 
-                title="LATAM Audio" 
+                title="Audio Labeling" 
                 reward="+0.15" 
                 icon="🎙️" 
                 color="bg-celo-blue" 
-                count={15} 
-                onClick={onStartTask}
+                count={datasetsLoading ? null : taskCounts.audio} 
+                onClick={() => onStartTask("audio")}
             />
              <CategoryCard 
-                title="Slang Detect" 
+                title="Text Labeling" 
                 reward="+0.05" 
                 icon="💬" 
                 color="bg-celo-orange" 
-                count={27} 
-                onClick={onStartTask}
+                count={datasetsLoading ? null : taskCounts.text} 
+                onClick={() => onStartTask("text")}
             />
              <CategoryCard 
-                title="Shelf Scan" 
+                title="Image Labeling" 
                 reward="+0.25" 
                 icon="📸" 
                 color="bg-celo-pink" 
-                count={0} 
-                disabled
-                onClick={() => {}}
+                count={datasetsLoading ? null : taskCounts.image} 
+                onClick={() => onStartTask("image")}
             />
         </div>
 
@@ -216,7 +201,7 @@ export function DashboardScreen({ user, loading, onStartTask, onClaim }: Dashboa
                     {[
                         { rank: 4, name: "@ana_maria", amount: "$156.50" },
                         { rank: 5, name: "@carlos_dev", amount: "$142.00" },
-                        { rank: 6, name: "@you", amount: `$${(user?.cusdc_balance ?? 0).toFixed(2)}`, isMe: true },
+                        { rank: 6, name: "@you", amount: `$${(user?.cusdc_balance ?? 0).toFixed(4)}`, isMe: true },
                     ].map((leaderboardUser) => (
                         <div key={leaderboardUser.rank} className={cn("flex items-center justify-between p-3", leaderboardUser.isMe && "bg-celo-yellow/20")}>
                             <div className="flex items-center gap-3">
@@ -241,12 +226,28 @@ export function DashboardScreen({ user, loading, onStartTask, onClaim }: Dashboa
 }
 
 function CategoryCard({ title, reward, icon, color, count, disabled, onClick }: any) {
+    const isLoading = count === null;
+    const hasNoTasks = count === 0;
+    
+    const handleClick = () => {
+        console.log(`[CategoryCard] 🎯 Category clicked:`, { 
+            title, 
+            count, 
+            isLoading, 
+            hasNoTasks, 
+            disabled 
+        });
+        if (!disabled && !hasNoTasks && !isLoading) {
+            onClick();
+        }
+    };
+    
     return (
         <button 
-            onClick={onClick}
-            disabled={disabled}
+            onClick={handleClick}
+            disabled={disabled || hasNoTasks || isLoading}
             className={`relative text-left w-full p-4 border-4 border-black transition-transform active:scale-95 flex items-center gap-4 group
-                ${disabled ? 'opacity-50 bg-gray-200 cursor-not-allowed' : 'bg-white hover:translate-x-1 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000]'}
+                ${disabled || hasNoTasks || isLoading ? 'opacity-50 bg-gray-200 cursor-not-allowed' : 'bg-white hover:translate-x-1 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000]'}
             `}
         >
             <div className={`w-16 h-16 ${color} flex items-center justify-center text-3xl border-2 border-black`}>
@@ -255,15 +256,16 @@ function CategoryCard({ title, reward, icon, color, count, disabled, onClick }: 
             <div className="flex-1">
                 <h4 className="text-headline text-xl">{title}</h4>
                 <div className="flex items-center gap-2 mt-1">
-                    <span className="bg-black text-white text-xs px-2 py-0.5 font-mono font-bold rounded">{reward} pts</span>
-                    {count > 0 ? (
-                        <span className="text-xs font-bold text-gray-500">{count} tasks left</span>
-                    ) : (
+                    {isLoading ? (
+                        <span className="text-xs font-bold text-gray-500">Loading...</span>
+                    ) : hasNoTasks ? (
                          <span className="text-xs font-bold text-red-500">Out of tasks</span>
+                    ) : (
+                        <span className="text-xs font-bold text-gray-500">{count} tasks left</span>
                     )}
                 </div>
             </div>
-            {count > 0 && (
+            {!isLoading && !hasNoTasks && (
                  <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center group-hover:bg-celo-yellow border-2 border-transparent group-hover:border-black transition-colors">
                     →
                 </div>

@@ -44,7 +44,7 @@ export function ClaimScreen({ balance, onBack, onClaim }: ClaimScreenProps) {
             <div className="mb-12 relative">
               <div className="absolute inset-0 bg-celo-yellow blur-2xl opacity-20 animate-pulse-slow"></div>
               <span className="relative text-7xl font-mono font-bold text-celo-yellow text-stroke-black">
-                ${balance.toFixed(2)}
+                ${balance.toFixed(4)}
               </span>
             </div>
 

@@ -1,51 +1,29 @@
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import type { Dataset } from "@/hooks/useAvailableDatasets";
+import { useAccount } from "wagmi";
+import { createClient } from "@/utils/supabase/client";
 
 interface FeedScreenProps {
   onBack: () => void;
   currentBalance: number;
   onEarn: (amount: number) => void;
+  datasets: Dataset[];
+  userAddress?: string;
+  onRefetchUser?: () => Promise<void>;
+  onRefetchDatasets?: () => Promise<void>;
 }
 
-// Mock Data
-const TASKS = [
-  {
-    id: 1,
-    type: "audio",
-    question: "Is the speaker angry?",
-    content: "audio_clip_1.mp3", // Placeholder
-    reward: 0.15,
-    options: ["Yes", "No", "Unsure"],
-    context: "Customer Service Call • ES-MX"
-  },
-  {
-    id: 4,
-    type: "bounding-box",
-    question: "Draw boxes around all motorcycles",
-    content: "/argentinastreet.png",
-    reward: 0.50,
-    options: [], // Custom UI handled by type check
-    context: "Object Detection • Buenos Aires"
-  },
-  {
-    id: 2,
-    type: "text",
-    question: "Is this slang for 'Cool'?",
-    content: "\"Está chido este lugar\"",
-    reward: 0.05,
-    options: ["Yes", "No"],
-    context: "Social Media Comment • ES-MX"
-  },
-  {
-    id: 3,
-    type: "image",
-    question: "Is the shelf fully stocked?",
-    content: "https://placehold.co/400x300/orange/white?text=Shelf",
-    reward: 0.25,
-    options: ["Yes", "Partially", "Empty"],
-    context: "Retail Auditing • Mexico City"
-  },
-];
+interface Task {
+  id: number;
+  datasetId: number;
+  type: "audio" | "text" | "image";
+  question: string;
+  content: string;
+  reward: number;
+  options: string[];
+  context: string;
+}
 
 interface Box {
   x: number;
@@ -54,8 +32,12 @@ interface Box {
   height: number;
 }
 
-function BoundingBoxTask({ content, onComplete }: { content: string, onComplete: (e: React.MouseEvent) => void }) {
-    const [boxes, setBoxes] = useState<Box[]>([]);
+function BoundingBoxTask({ content, onComplete, boxes: externalBoxes, setBoxes: setExternalBoxes }: { 
+  content: string;
+  onComplete: (e: React.MouseEvent, boxes: Box[]) => void;
+  boxes: Box[];
+  setBoxes: (boxes: Box[]) => void;
+}) {
     const [currentBox, setCurrentBox] = useState<Box | null>(null);
     const [isDrawing, setIsDrawing] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -97,13 +79,13 @@ function BoundingBoxTask({ content, onComplete }: { content: string, onComplete:
         if (!isDrawing) return;
         setIsDrawing(false);
         if (currentBox && currentBox.width > 10 && currentBox.height > 10) {
-            setBoxes([...boxes, currentBox]);
+            setExternalBoxes([...externalBoxes, currentBox]);
         }
         setCurrentBox(null);
     };
 
     const undoLast = () => {
-        setBoxes(boxes.slice(0, -1));
+        setExternalBoxes(externalBoxes.slice(0, -1));
     };
 
     return (
@@ -122,7 +104,7 @@ function BoundingBoxTask({ content, onComplete }: { content: string, onComplete:
                 <img src={content} alt="Annotate" className="w-full h-full object-cover pointer-events-none select-none" draggable={false} />
                 
                 {/* Existing Boxes */}
-                {boxes.map((box, i) => (
+                {externalBoxes.map((box, i) => (
                     <div
                         key={i}
                         className="absolute border-2 border-celo-yellow bg-celo-yellow/20"
@@ -152,57 +134,364 @@ function BoundingBoxTask({ content, onComplete }: { content: string, onComplete:
              <div className="flex gap-4 w-full">
                 <button 
                     onClick={undoLast}
-                    disabled={boxes.length === 0}
+                    disabled={externalBoxes.length === 0}
                     className="px-4 py-3 bg-gray-700 text-white rounded-lg font-bold disabled:opacity-50"
                 >
                     Undo
                 </button>
                 <button 
-                    onClick={onComplete}
-                    disabled={boxes.length === 0}
+                    onClick={(e) => onComplete(e, externalBoxes)}
+                    disabled={externalBoxes.length === 0}
                     className="flex-1 px-4 py-3 bg-celo-yellow text-black border-b-4 border-celo-brown rounded-lg font-bold disabled:opacity-50 active:scale-95 transition-all"
                 >
-                    Submit ({boxes.length})
+                    Submit ({externalBoxes.length})
                 </button>
              </div>
         </div>
     );
 }
 
-export function FeedScreen({ onBack, currentBalance, onEarn }: FeedScreenProps) {
+export function FeedScreen({ onBack, currentBalance, onEarn, datasets, userAddress, onRefetchUser, onRefetchDatasets }: FeedScreenProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const audioRefs = useRef<Record<number, HTMLAudioElement | null>>({});
+  const lastScrollTop = useRef(0);
+  const currentTaskIndex = useRef(0);
   const [streak, setStreak] = useState(3);
   const [showReward, setShowReward] = useState<{amount: number, x: number, y: number} | null>(null);
   const [isBalanceAnimating, setIsBalanceAnimating] = useState(false);
+  const [boundingBoxes, setBoundingBoxes] = useState<Record<number, Box[]>>({});
+  const [audioPlaying, setAudioPlaying] = useState<Record<number, boolean>>({});
+  const [textContent, setTextContent] = useState<Record<number, string>>({});
+  const [textLoading, setTextLoading] = useState<Record<number, boolean>>({});
+  const [completedTasks, setCompletedTasks] = useState<Set<number>>(new Set());
 
-  const handleAnswer = (reward: number, e: React.MouseEvent) => {
-    // 1. Update Balance (via parent prop)
-    onEarn(reward);
-    setStreak(prev => prev + 1);
+  console.log("[FeedScreen] 🎬 Rendering with:", { 
+    datasetsCount: datasets.length, 
+    currentBalance, 
+    userAddress,
+    hasRefetchCallback: !!onRefetchUser,
+    datasets: datasets.map(d => ({ id: d.dataset_id, type: d.file_type, url: d.file_url }))
+  });
+
+  // Convert datasets to tasks format
+  const tasks: Task[] = datasets.map((dataset, index) => {
+    // For images, we'll use bounding-box type
+    const taskType = dataset.file_type === "image" ? "image" : dataset.file_type;
+    
+    console.log("[FeedScreen] 🔄 Mapping dataset to task:", {
+      datasetId: dataset.dataset_id,
+      fileType: dataset.file_type,
+      taskType,
+      hasFileUrl: !!dataset.file_url
+    });
+    
+    return {
+      id: index,
+      datasetId: dataset.dataset_id,
+      type: taskType,
+      question: dataset.task,
+      content: dataset.file_url || "",
+      reward: Number(dataset.cusdc_payout_per_annotation),
+      options: taskType === "image" ? [] : taskType === "audio" ? ["Yes", "No", "Unsure"] : ["Yes", "No"],
+      context: `Dataset #${dataset.dataset_id} • ${dataset.file_type.toUpperCase()}`
+    };
+  });
+
+  console.log("[FeedScreen] 📋 Mapped tasks:", tasks.map(t => ({ 
+    id: t.id, 
+    datasetId: t.datasetId, 
+    type: t.type, 
+    reward: t.reward,
+    hasContent: !!t.content
+  })));
+
+  if (tasks.length === 0) {
+    console.warn("[FeedScreen] ⚠️ No tasks available! Debug info:", {
+      datasetsReceived: datasets.length,
+      datasets: datasets,
+      userAddress,
+    });
+  }
+
+  // Fetch text content for text tasks
+  useEffect(() => {
+    const fetchTextContent = async () => {
+      for (const task of tasks) {
+        if (task.type === 'text' && task.content && !textContent[task.id] && !textLoading[task.id]) {
+          console.log("[FeedScreen] 📄 Fetching text content for task:", task.id, "from URL:", task.content);
+          setTextLoading(prev => ({ ...prev, [task.id]: true }));
+          
+          try {
+            const response = await fetch(task.content);
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const text = await response.text();
+            console.log("[FeedScreen] ✅ Text content fetched for task:", task.id, "length:", text.length);
+            setTextContent(prev => ({ ...prev, [task.id]: text }));
+          } catch (error) {
+            console.error("[FeedScreen] ❌ Failed to fetch text content for task:", task.id, error);
+            setTextContent(prev => ({ ...prev, [task.id]: "Error loading text content" }));
+          } finally {
+            setTextLoading(prev => ({ ...prev, [task.id]: false }));
+          }
+        }
+      }
+    };
+
+    fetchTextContent();
+  }, [tasks, textContent, textLoading]);
+
+  // Prevent scrolling back up to completed tasks
+  useEffect(() => {
+    const handleScroll = (e: Event) => {
+      if (!scrollRef.current) return;
+      
+      const scrollTop = scrollRef.current.scrollTop;
+      const height = scrollRef.current.clientHeight;
+      const newTaskIndex = Math.round(scrollTop / height);
+      
+      // Allow scrolling to the "All Caught Up" screen (which is at tasks.length index)
+      const maxAllowedIndex = tasks.length; // Allow one more than last task for end screen
+      
+      // Check if user is trying to scroll up
+      if (scrollTop < lastScrollTop.current) {
+        console.log("[FeedScreen] 🚫 Preventing upward scroll:", { 
+          from: lastScrollTop.current, 
+          to: scrollTop,
+          currentTask: currentTaskIndex.current 
+        });
+        
+        // Snap back to current task
+        scrollRef.current.scrollTo({
+          top: currentTaskIndex.current * height,
+          behavior: 'smooth'
+        });
+        return;
+      }
+      
+      // Update last scroll position
+      lastScrollTop.current = scrollTop;
+      
+      // Update current task index if moving forward (allow moving to end screen)
+      if (newTaskIndex > currentTaskIndex.current && newTaskIndex <= maxAllowedIndex) {
+        console.log("[FeedScreen] ⬇️ Moving to next:", { 
+          from: currentTaskIndex.current, 
+          to: newTaskIndex,
+          isEndScreen: newTaskIndex === tasks.length
+        });
+        currentTaskIndex.current = newTaskIndex;
+      }
+    };
+
+    const scrollElement = scrollRef.current;
+    if (scrollElement) {
+      scrollElement.addEventListener('scroll', handleScroll);
+      return () => scrollElement.removeEventListener('scroll', handleScroll);
+    }
+  }, [tasks.length]);
+
+  // Auto-play audio when scrolling to a new task
+  useEffect(() => {
+    const handleScrollEnd = () => {
+      if (!scrollRef.current) return;
+      
+      const scrollTop = scrollRef.current.scrollTop;
+      const height = scrollRef.current.clientHeight;
+      const newTaskIndex = Math.round(scrollTop / height);
+      
+      const currentTask = tasks[newTaskIndex];
+      if (currentTask?.type === 'audio') {
+        console.log("[FeedScreen] 🎵 Auto-playing audio for task:", currentTask.id);
+        const audio = audioRefs.current[currentTask.id];
+        if (audio) {
+          // Reset and play
+          audio.currentTime = 0;
+          audio.play().catch(err => {
+            console.error("[FeedScreen] ❌ Failed to play audio:", err);
+          });
+        }
+      }
+    };
+
+    const scrollElement = scrollRef.current;
+    if (scrollElement) {
+      scrollElement.addEventListener('scrollend', handleScrollEnd);
+      // Also play the first audio on mount if it's an audio task
+      if (tasks[0]?.type === 'audio') {
+        setTimeout(() => {
+          const audio = audioRefs.current[tasks[0].id];
+          if (audio) {
+            console.log("[FeedScreen] 🎵 Auto-playing first audio task");
+            audio.play().catch(err => {
+              console.error("[FeedScreen] ❌ Failed to play first audio:", err);
+            });
+          }
+        }, 500);
+      }
+      return () => scrollElement.removeEventListener('scrollend', handleScrollEnd);
+    }
+  }, [tasks]);
+
+  const toggleAudio = (taskId: number) => {
+    const audio = audioRefs.current[taskId];
+    if (audio) {
+      if (audio.paused) {
+        console.log("[FeedScreen] ▶️ Playing audio for task:", taskId);
+        audio.play().catch(err => {
+          console.error("[FeedScreen] ❌ Failed to play audio:", err);
+        });
+      } else {
+        console.log("[FeedScreen] ⏸️ Pausing audio for task:", taskId);
+        audio.pause();
+      }
+    }
+  };
+
+  const handleAnswer = async (task: Task, answer: string | Box[], e: React.MouseEvent) => {
+    console.log("[FeedScreen] ✅ Task completed:", { 
+      taskId: task.id, 
+      datasetId: task.datasetId, 
+      taskType: task.type,
+      answer: task.type === "image" ? `${(answer as Box[]).length} boxes` : answer,
+      reward: task.reward
+    });
+
+    // Mark task as completed in UI state
+    setCompletedTasks(prev => {
+      const newSet = new Set(prev);
+      newSet.add(task.id);
+      console.log("[FeedScreen] 📝 Marked task as completed:", task.id, "Total completed:", newSet.size);
+      return newSet;
+    });
+
+    // Save annotation to database - triggers handle balance & count updates!
+    if (userAddress) {
+      console.log("[FeedScreen] 💾 Saving annotation to database...");
+      
+      try {
+        const supabase = createClient();
+        
+        const payload = task.type === "image" 
+          ? { boxes: answer } // Bounding boxes for images
+          : { answer }; // Text answer for audio/text tasks
+
+        console.log("[FeedScreen] 📝 Annotation payload:", { 
+          dataset_id: task.datasetId, 
+          user_address: userAddress.toLowerCase(),
+          payload 
+        });
+
+        const { error: insertError } = await supabase.from("annotations").insert({
+          dataset_id: task.datasetId,
+          user_address: userAddress.toLowerCase(),
+          payload
+        });
+
+        if (insertError) {
+          console.error("[FeedScreen] ❌ Failed to insert annotation:", insertError);
+          throw insertError;
+        }
+        
+        console.log("[FeedScreen] ✅ Annotation saved - DB triggers will update balance & annotation count");
+
+      } catch (error) {
+        console.error("[FeedScreen] ❌ Failed to save annotation:", error);
+      }
+    } else {
+      console.warn("[FeedScreen] ⚠️ No user address - skipping database save");
+    }
+
+    // 1. Optimistically update Balance (via parent prop)
+    console.log("[FeedScreen] 🚀 Optimistically updating balance:", {
+      oldBalance: currentBalance,
+      newBalance: currentBalance + task.reward,
+      reward: task.reward
+    });
+    onEarn(task.reward);
+    setStreak(prev => {
+      console.log("[FeedScreen] 🔥 Updating streak:", { old: prev, new: prev + 1 });
+      return prev + 1;
+    });
 
     // 2. Trigger Jackpot Animation
+    console.log("[FeedScreen] 🎰 Triggering jackpot animation");
     setIsBalanceAnimating(true);
     setTimeout(() => setIsBalanceAnimating(false), 600);
 
     // 3. Show Reward Animation
     const rect = (e.target as HTMLElement).getBoundingClientRect();
     setShowReward({
-        amount: reward,
+        amount: task.reward,
         x: rect.left + rect.width / 2,
         y: rect.top
     });
+    console.log("[FeedScreen] ✨ Showing reward animation:", { amount: task.reward });
 
-    // 4. Scroll to next (after delay)
+    // 4. Clear bounding boxes for this task
+    if (task.type === "image") {
+      console.log("[FeedScreen] 🗑️ Clearing bounding boxes for task:", task.id);
+      setBoundingBoxes(prev => ({ ...prev, [task.id]: [] }));
+    }
+
+    // 5. Scroll to next (after delay)
     setTimeout(() => {
         setShowReward(null);
         if (scrollRef.current) {
              const height = scrollRef.current.clientHeight;
              const currentScroll = scrollRef.current.scrollTop;
              const nextScroll = Math.ceil((currentScroll + 10) / height) * height;
+             console.log("[FeedScreen] 📜 Scrolling to next task:", { 
+               currentScroll, 
+               nextScroll, 
+               height 
+             });
              scrollRef.current.scrollTo({ top: nextScroll, behavior: 'smooth' });
         }
     }, 800);
   };
+
+  const handleBackToDashboard = async () => {
+    console.log("[FeedScreen] 🔙 Navigating back to dashboard...");
+    
+    // Refetch user data to sync balance before going back
+    if (onRefetchUser) {
+      console.log("[FeedScreen] 🔄 Refetching user data to sync balance...");
+      await onRefetchUser();
+      console.log("[FeedScreen] ✅ User data refetched");
+    } else {
+      console.warn("[FeedScreen] ⚠️ No user refetch callback provided");
+    }
+
+    // Refetch datasets to sync counts before going back
+    if (onRefetchDatasets) {
+      console.log("[FeedScreen] 🔄 Refetching datasets to sync counts...");
+      await onRefetchDatasets();
+      console.log("[FeedScreen] ✅ Datasets refetched");
+    } else {
+      console.warn("[FeedScreen] ⚠️ No datasets refetch callback provided");
+    }
+    
+    console.log("[FeedScreen] ✅ Calling onBack()");
+    onBack();
+  };
+
+  if (tasks.length === 0) {
+    console.log("[FeedScreen] ⚠️ No tasks available, showing empty state");
+    return (
+      <div className="fixed inset-0 z-50 w-full bg-black text-white flex items-center justify-center">
+        <div className="text-center p-6">
+          <h2 className="text-headline text-3xl text-celo-yellow mb-4">No Tasks Available</h2>
+          <p className="text-white mb-8">There are currently no tasks available for your region.</p>
+          <button onClick={handleBackToDashboard} className="btn-celo-primary">
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  console.log("[FeedScreen] 🎬 Rendering feed with", tasks.length, "tasks");
 
   return (
     <div className="fixed inset-0 z-50 w-full bg-black text-white overflow-hidden">
@@ -210,7 +499,7 @@ export function FeedScreen({ onBack, currentBalance, onEarn }: FeedScreenProps) 
       {/* Top Overlay UI */}
       <div className="absolute top-0 left-0 w-full p-4 flex justify-between items-start z-50 pointer-events-none">
          {/* Streak */}
-         <div className="flex flex-col items-center pointer-events-auto" onClick={onBack}>
+         <div className="flex flex-col items-center pointer-events-auto" onClick={handleBackToDashboard}>
              <div className="flex items-center gap-1 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
                 <span className="text-2xl">🔥</span>
                 <span className="text-xl font-bold text-orange-500">{streak}</span>
@@ -224,7 +513,7 @@ export function FeedScreen({ onBack, currentBalance, onEarn }: FeedScreenProps) 
             isBalanceAnimating ? "animate-jackpot z-[60]" : "animate-pulse-slow"
          )}>
             <span className="text-xl">🪙</span>
-            <span className="font-mono font-bold text-lg">{currentBalance.toFixed(2)}</span>
+            <span className="font-mono font-bold text-lg">{currentBalance.toFixed(4)}</span>
          </div>
       </div>
 
@@ -234,7 +523,7 @@ export function FeedScreen({ onBack, currentBalance, onEarn }: FeedScreenProps) 
             className="absolute z-[100] pointer-events-none animate-bounce-custom text-4xl font-black text-celo-yellow text-stroke-black"
             style={{ left: showReward.x, top: showReward.y }}
         >
-            +{showReward.amount.toFixed(2)}
+            +{showReward.amount.toFixed(4)}
         </div>
       )}
 
@@ -244,7 +533,7 @@ export function FeedScreen({ onBack, currentBalance, onEarn }: FeedScreenProps) 
         className="h-full w-full overflow-y-scroll snap-y snap-mandatory scroll-smooth"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }} // Hide scrollbar
       >
-        {TASKS.map((task, index) => (
+        {tasks.map((task) => (
             <section 
                 key={task.id} 
                 className="h-full w-full snap-start snap-always flex flex-col relative"
@@ -265,44 +554,86 @@ export function FeedScreen({ onBack, currentBalance, onEarn }: FeedScreenProps) 
                         {/* Visualization based on type */}
                         <div className={cn(
                             "bg-black/50 rounded-2xl border border-white/10 mb-8 flex items-center justify-center overflow-hidden",
-                             task.type === 'bounding-box' ? "p-0 border-none bg-transparent" : "p-6 min-h-[200px]"
+                             task.type === 'image' ? "p-0 border-none bg-transparent" : "p-6 min-h-[200px]"
                         )}>
                             {task.type === 'audio' && (
-                                <div className="flex items-center gap-2 w-full justify-center">
-                                    <div className="w-1 h-4 bg-celo-yellow animate-pulse delay-75"></div>
-                                    <div className="w-1 h-8 bg-celo-yellow animate-pulse delay-100"></div>
-                                    <div className="w-1 h-12 bg-celo-yellow animate-pulse delay-150"></div>
-                                    <div className="w-1 h-6 bg-celo-yellow animate-pulse delay-200"></div>
-                                    <div className="w-1 h-10 bg-celo-yellow animate-pulse delay-300"></div>
-                                    <span className="ml-4 text-xs font-mono text-celo-yellow">PLAYING...</span>
+                                <div className="flex flex-col items-center gap-4 w-full">
+                                    {/* Hidden audio element */}
+                                    <audio
+                                        ref={el => { audioRefs.current[task.id] = el; }}
+                                        src={task.content}
+                                        onPlay={() => {
+                                            console.log("[FeedScreen] 🎵 Audio started playing:", task.id);
+                                            setAudioPlaying(prev => ({ ...prev, [task.id]: true }));
+                                        }}
+                                        onPause={() => {
+                                            console.log("[FeedScreen] ⏸️ Audio paused:", task.id);
+                                            setAudioPlaying(prev => ({ ...prev, [task.id]: false }));
+                                        }}
+                                        onEnded={() => {
+                                            console.log("[FeedScreen] 🎵 Audio ended:", task.id);
+                                            setAudioPlaying(prev => ({ ...prev, [task.id]: false }));
+                                        }}
+                                        onError={(e) => {
+                                            console.error("[FeedScreen] ❌ Audio error:", { taskId: task.id, error: e });
+                                        }}
+                                    />
+                                    
+                                    {/* Visual waveform */}
+                                    <div className="flex items-center gap-2 w-full justify-center">
+                                        <div className={cn("w-1 h-4 bg-celo-yellow transition-all", audioPlaying[task.id] && "animate-pulse delay-75")}></div>
+                                        <div className={cn("w-1 h-8 bg-celo-yellow transition-all", audioPlaying[task.id] && "animate-pulse delay-100")}></div>
+                                        <div className={cn("w-1 h-12 bg-celo-yellow transition-all", audioPlaying[task.id] && "animate-pulse delay-150")}></div>
+                                        <div className={cn("w-1 h-6 bg-celo-yellow transition-all", audioPlaying[task.id] && "animate-pulse delay-200")}></div>
+                                        <div className={cn("w-1 h-10 bg-celo-yellow transition-all", audioPlaying[task.id] && "animate-pulse delay-300")}></div>
+                                        <span className="ml-4 text-xs font-mono text-celo-yellow">
+                                            {audioPlaying[task.id] ? "PLAYING..." : "PAUSED"}
+                                        </span>
+                                    </div>
+
+                                    {/* Play/Pause button */}
+                                    <button
+                                        onClick={() => toggleAudio(task.id)}
+                                        className="mt-2 px-6 py-2 bg-celo-yellow text-black rounded-full font-bold border-2 border-black hover:scale-105 active:scale-95 transition-transform"
+                                    >
+                                        {audioPlaying[task.id] ? "⏸️ Pause" : "▶️ Play"}
+                                    </button>
                                 </div>
                             )}
                             {task.type === 'text' && (
-                                <p className="text-2xl font-serif italic text-center">
-                                    {task.content}
-                                </p>
+                                <div className="flex flex-col items-center justify-center w-full">
+                                    {textLoading[task.id] ? (
+                                        <div className="flex flex-col items-center gap-3">
+                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-celo-yellow"></div>
+                                            <span className="text-xs text-gray-400">Loading text...</span>
+                                        </div>
+                                    ) : (
+                                        <p className="text-2xl font-serif italic text-center whitespace-pre-wrap break-words px-4">
+                                            {textContent[task.id] || task.content}
+                                        </p>
+                                    )}
+                                </div>
                             )}
-                             {task.type === 'image' && (
-                                <img src={task.content} alt="Task" className="rounded-lg object-cover max-h-[300px]" />
-                            )}
-                            {task.type === 'bounding-box' && (
+                            {task.type === 'image' && (
                                 <BoundingBoxTask 
                                     content={task.content} 
-                                    onComplete={(e) => handleAnswer(task.reward, e)} 
+                                    onComplete={(e, boxes) => handleAnswer(task, boxes, e)}
+                                    boxes={boundingBoxes[task.id] || []}
+                                    setBoxes={(boxes) => setBoundingBoxes(prev => ({ ...prev, [task.id]: boxes }))}
                                 />
                             )}
                         </div>
                     </div>
                 </div>
 
-                {/* Interaction Area (Bottom Sheet) - Hide for bounding box since it has its own controls */}
-                {task.type !== 'bounding-box' && (
+                {/* Interaction Area (Bottom Sheet) - Hide for image since it has its own controls */}
+                {task.type !== 'image' && (
                     <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black via-black/90 to-transparent pt-12">
                         <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
                             {task.options.map((option, i) => (
                                 <button
                                     key={i}
-                                    onClick={(e) => handleAnswer(task.reward, e)}
+                                    onClick={(e) => handleAnswer(task, option, e)}
                                     className={cn(
                                         "py-4 px-6 rounded-xl font-bold text-lg border-b-4 active:scale-95 transition-all",
                                         i === 0 ? "bg-celo-yellow text-black border-celo-brown" : 
@@ -320,8 +651,8 @@ export function FeedScreen({ onBack, currentBalance, onEarn }: FeedScreenProps) 
                     </div>
                 )}
                 
-                {/* Special Skip for Bounding Box */}
-                 {task.type === 'bounding-box' && (
+                {/* Special Skip for Image */}
+                 {task.type === 'image' && (
                     <div className="absolute bottom-0 left-0 w-full pb-8 pt-4 text-center bg-gradient-to-t from-black to-transparent">
                          <button className="text-xs text-gray-500 uppercase tracking-widest hover:text-white transition-colors">
                             Skip Task (-1 Streak)
@@ -337,7 +668,7 @@ export function FeedScreen({ onBack, currentBalance, onEarn }: FeedScreenProps) 
             <div className="text-center">
                 <h2 className="text-headline text-4xl text-celo-yellow mb-4">All Caught Up!</h2>
                 <p className="text-white mb-8">Come back tomorrow for more tasks.</p>
-                <button onClick={onBack} className="btn-celo-primary">
+                <button onClick={handleBackToDashboard} className="btn-celo-primary">
                     Back to Dashboard
                 </button>
             </div>

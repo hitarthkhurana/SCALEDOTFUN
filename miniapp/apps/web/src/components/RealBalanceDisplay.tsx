@@ -31,7 +31,7 @@ export function RealBalanceDisplay({ loading }: RealBalanceDisplayProps) {
 
   return (
     <span className="font-mono font-bold text-white">
-      {loading || balanceLoading ? "..." : balance.toFixed(2)}
+      {loading || balanceLoading ? "..." : balance.toFixed(4)}
     </span>
   );
 }

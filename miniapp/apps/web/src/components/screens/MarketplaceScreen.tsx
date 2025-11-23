@@ -40,16 +40,6 @@ export function MarketplaceScreen({ onLaunch }: MarketplaceScreenProps) {
   const [buyStatus, setBuyStatus] = useState<string>("");
   const [purchasedListingIds, setPurchasedListingIds] = useState<Set<number>>(new Set());
 
-  // Fetch cUSD Balance
-  const { data: cusdBalance } = useReadContract({
-    address: CUSD_ADDRESS,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-  });
-
-  const formattedBalance = cusdBalance ? formatUnits(cusdBalance as bigint, 18) : "0.00";
-
   // Fetch marketplace listings and purchases from Supabase
   useEffect(() => {
     async function fetchListings() {
@@ -102,13 +92,6 @@ export function MarketplaceScreen({ onLaunch }: MarketplaceScreenProps) {
     try {
       const supabase = createClient();
       const priceWei = parseUnits(listing.price.toString(), 18);
-
-      // 1. Check balance
-      if (cusdBalance && (cusdBalance as bigint) < priceWei) {
-        alert(`Insufficient balance. You need ${listing.price} cUSD`);
-        setBuyingId(null);
-        return;
-      }
 
       // 2. Approve CUSD
       setBuyStatus("Please approve cUSD spending...");
@@ -216,22 +199,13 @@ export function MarketplaceScreen({ onLaunch }: MarketplaceScreenProps) {
             <h2 className="text-headline text-3xl text-celo-yellow">Marketplace</h2>
             <p className="text-sm font-mono text-celo-sand">Buy & Sell Labeled Datasets 🚀</p>
           </div>
-          <div className="flex items-center gap-3">
-            {/* Balance Display */}
-            <div className="bg-celo-forest px-3 py-1 rounded-full border border-celo-lime flex items-center gap-2">
-              <span className="text-celo-yellow text-lg">🪙</span>
-              <span className="font-mono font-bold text-white text-sm">
-                {parseFloat(formattedBalance).toFixed(2)}
-              </span>
-            </div>
-            {/* Launch Button */}
-            <button
-              onClick={onLaunch}
-              className="bg-celo-yellow text-celo-purple font-bold px-4 py-2 rounded-full border-2 border-white shadow-[4px_4px_0px_0px_#ffffff] active:translate-y-1 active:shadow-none transition-all"
-            >
-              + Launch
-            </button>
-          </div>
+          {/* Launch Button */}
+          <button
+            onClick={onLaunch}
+            className="bg-celo-yellow text-celo-purple font-bold px-4 py-2 rounded-full border-2 border-white shadow-[4px_4px_0px_0px_#ffffff] active:translate-y-1 active:shadow-none transition-all"
+          >
+            + Launch
+          </button>
         </div>
         
         {/* Search / Filter Mock */}

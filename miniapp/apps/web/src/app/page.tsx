@@ -12,51 +12,122 @@ import { ProfileScreen } from "@/components/screens/ProfileScreen";
 import { UploadToMarketplaceScreen } from "@/components/screens/UploadToMarketplaceScreen";
 import { BottomNav } from "@/components/BottomNav";
 import { useUser } from "@/hooks/useUser";
+import { useAvailableDatasets } from "@/hooks/useAvailableDatasets";
 
 type Screen = "welcome" | "verification" | "dashboard" | "feed" | "claim" | "marketplace" | "launch-dataset" | "profile" | "upload-to-marketplace";
+type TaskType = "audio" | "text" | "image" | null;
 
 export default function Home() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("welcome");
   const { user, loading, refetch } = useUser();
+  const { datasets, refetch: refetchDatasets } = useAvailableDatasets(user?.country, user?.address);
   
-  // Mock balance for Feed and Claim screens (not connected to real database yet)
-  const [mockBalance, setMockBalance] = useState(124.50);
+  console.log("[Home] 🏠 Current state:", { 
+    currentScreen, 
+    userAddress: user?.address,
+    userCountry: user?.country,
+    userBalance: user?.cusdc_balance,
+    loading,
+    datasetsCount: datasets.length
+  });
+  
+  // Track which task type is being worked on
+  const [selectedTaskType, setSelectedTaskType] = useState<TaskType>(null);
+  
+  // Track optimistic balance updates (starts with real balance from user)
+  const [optimisticBalance, setOptimisticBalance] = useState<number | null>(null);
 
   // State for dataset being uploaded to marketplace
   const [datasetToUpload, setDatasetToUpload] = useState<any | null>(null);
 
+  // Sync optimistic balance with real user balance when user data changes
+  useEffect(() => {
+    if (user?.cusdc_balance !== undefined) {
+      console.log("[Home] 💰 Syncing optimistic balance with user balance:", {
+        oldOptimisticBalance: optimisticBalance,
+        newUserBalance: user.cusdc_balance
+      });
+      setOptimisticBalance(user.cusdc_balance);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.cusdc_balance]);
+
   const navigateTo = (screen: Screen) => {
+    console.log("[Home] 🧭 Navigating:", { from: currentScreen, to: screen });
     setCurrentScreen(screen);
   };
 
   const handleEarn = (amount: number) => {
-    // Update mock balance for now
-    // TODO: Implement actual earning logic with database update
-    console.log("User earned:", amount);
-    setMockBalance(prev => prev + amount);
+    // Optimistically update balance
+    const oldBalance = optimisticBalance ?? 0;
+    const newBalance = oldBalance + amount;
+    
+    console.log("[Home] 💰 Handling earn (optimistic update):", {
+      amount,
+      oldBalance,
+      newBalance
+    });
+    
+    setOptimisticBalance(newBalance);
   };
 
   const handleClaim = () => {
-    // Reset mock balance for now
+    console.log("[Home] 🎁 Handling claim:", { 
+      optimisticBalance,
+      userBalance: user?.cusdc_balance 
+    });
     // TODO: Implement actual claiming logic with database update
-    console.log("User claimed:", mockBalance);
-    setMockBalance(0);
+    // For now, just navigate - claiming logic will be implemented later
   };
 
   const handleUploadToMarketplace = (dataset: any) => {
+    console.log("[Home] 📤 Uploading to marketplace:", { 
+      datasetId: dataset?.dataset_id 
+    });
     setDatasetToUpload(dataset);
     navigateTo("upload-to-marketplace");
+  };
+
+  const handleStartTask = (taskType: "audio" | "text" | "image") => {
+    console.log("[Home] 🎯 Starting task type:", { 
+      taskType,
+      availableDatasets: datasets.filter(d => d.file_type === taskType).length
+    });
+    setSelectedTaskType(taskType);
+    navigateTo("feed");
   };
 
   // Auto-refetch user data when screen changes to dashboard or profile
   useEffect(() => {
     if (currentScreen === "dashboard" || currentScreen === "profile") {
+      console.log("[Home] 🔄 Auto-refetching user data for screen:", currentScreen);
       refetch();
     }
   }, [currentScreen, refetch]);
 
   // Show BottomNav only on main tabs
   const showBottomNav = currentScreen === "dashboard" || currentScreen === "profile" || currentScreen === "marketplace";
+
+  // Filter datasets by selected task type
+  const filteredDatasets = selectedTaskType 
+    ? datasets.filter(dataset => dataset.file_type === selectedTaskType)
+    : [];
+
+  console.log("[Home] 📊 Filtered datasets:", { 
+    selectedTaskType, 
+    totalDatasets: datasets.length,
+    filteredCount: filteredDatasets.length,
+    filteredDatasets: filteredDatasets.map(d => ({ 
+      id: d.dataset_id, 
+      type: d.file_type 
+    }))
+  });
+
+  console.log("[Home] 💰 Current balance state:", {
+    optimisticBalance,
+    userBalance: user?.cusdc_balance,
+    displayBalance: optimisticBalance ?? user?.cusdc_balance ?? 0
+  });
 
   return (
     <main className="min-h-screen bg-background pb-safe-area">
@@ -72,22 +143,26 @@ export default function Home() {
         <DashboardScreen 
           user={user}
           loading={loading}
-          onStartTask={() => navigateTo("feed")} 
+          onStartTask={handleStartTask} 
           onClaim={() => navigateTo("claim")}
         />
       )}
 
       {currentScreen === "feed" && (
         <FeedScreen 
-          currentBalance={mockBalance}
+          currentBalance={optimisticBalance ?? user?.cusdc_balance ?? 0}
           onEarn={handleEarn}
-          onBack={() => navigateTo("dashboard")} 
+          onBack={() => navigateTo("dashboard")}
+          datasets={filteredDatasets}
+          userAddress={user?.address}
+          onRefetchUser={refetch}
+          onRefetchDatasets={refetchDatasets}
         />
       )}
 
       {currentScreen === "claim" && (
         <ClaimScreen 
-          balance={mockBalance}
+          balance={optimisticBalance ?? user?.cusdc_balance ?? 0}
           onBack={() => navigateTo("dashboard")}
           onClaim={handleClaim}
         />
@@ -96,6 +171,7 @@ export default function Home() {
       {currentScreen === "profile" && (
         <ProfileScreen 
           onUploadToMarketplace={handleUploadToMarketplace}
+          user={user}
         />
       )}
 

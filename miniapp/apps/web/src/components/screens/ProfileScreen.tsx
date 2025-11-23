@@ -6,8 +6,9 @@ import { useAccount, useReadContract } from "wagmi";
 import { formatUnits } from "viem";
 import { createClient } from "@/utils/supabase/client";
 import { ERC20_ABI } from "@/abi/ERC20";
+import type { User } from "@/hooks/useUser";
 
-// Celo Mainnet cUSD Address
+// Mainnet cUSD Address
 const CUSD_ADDRESS = "0x765DE816845861e75A25fCA122bb6898B8B1282a";
 
 interface Dataset {
@@ -27,6 +28,7 @@ interface Dataset {
 
 interface ProfileScreenProps {
   onUploadToMarketplace: (dataset: Dataset) => void;
+  user: User | null;
 }
 
 interface Purchase {
@@ -38,13 +40,13 @@ interface Purchase {
   dataset_name: string;
 }
 
-export function ProfileScreen({ onUploadToMarketplace }: ProfileScreenProps) {
+export function ProfileScreen({ onUploadToMarketplace, user }: ProfileScreenProps) {
   const { address } = useAccount();
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch cUSD Balance from blockchain
+  // Fetch onchain cUSD Balance
   const { data: cusdBalance } = useReadContract({
     address: CUSD_ADDRESS,
     abi: ERC20_ABI,
@@ -52,9 +54,8 @@ export function ProfileScreen({ onUploadToMarketplace }: ProfileScreenProps) {
     args: address ? [address] : undefined,
   });
 
-  const formattedBalance = cusdBalance
-    ? formatUnits(cusdBalance as bigint, 18)
-    : "0.00";
+  const onchainBalance = cusdBalance ? parseFloat(formatUnits(cusdBalance as bigint, 18)) : 0;
+  const supabaseBalance = user?.cusdc_balance ?? 0;
 
   // Fetch user's datasets from Supabase
   useEffect(() => {
@@ -193,6 +194,21 @@ export function ProfileScreen({ onUploadToMarketplace }: ProfileScreenProps) {
 
         <div className="grid grid-cols-2 gap-3 mt-4">
           <div className="bg-white/10 p-3 rounded-xl border border-white/20 backdrop-blur-sm">
+            <p className="text-celo-sand text-xs uppercase font-bold mb-1">Earnings (cUSDC)</p>
+            <p className="text-2xl font-bold text-celo-yellow font-mono">
+              {supabaseBalance.toFixed(4)}
+            </p>
+          </div>
+          <div className="bg-white/10 p-3 rounded-xl border border-white/20 backdrop-blur-sm">
+            <p className="text-celo-sand text-xs uppercase font-bold mb-1">Wallet (cUSD)</p>
+            <p className="text-2xl font-bold text-celo-yellow font-mono">
+              {onchainBalance.toFixed(4)}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <div className="bg-white/10 p-3 rounded-xl border border-white/20 backdrop-blur-sm">
             <p className="text-celo-sand text-xs uppercase font-bold mb-1">Active Datasets</p>
             <p className="text-2xl font-bold text-celo-yellow">
               {datasets.filter(d => !d.listed_on_marketplace).length}
@@ -203,18 +219,6 @@ export function ProfileScreen({ onUploadToMarketplace }: ProfileScreenProps) {
             <p className="text-2xl font-bold text-celo-yellow">
               {datasets.filter(d => d.listed_on_marketplace).length}
             </p>
-          </div>
-        </div>
-
-        {/* Wallet Balance */}
-        <div className="mt-3">
-          <div className="bg-celo-yellow/20 p-3 rounded-xl border border-celo-yellow/40 backdrop-blur-sm">
-            <div className="flex items-center justify-between">
-              <p className="text-celo-sand text-xs uppercase font-bold">💰 cUSD Balance</p>
-              <p className="text-lg font-bold text-celo-yellow font-mono">
-                {Number(formattedBalance).toFixed(2)} cUSD
-              </p>
-            </div>
           </div>
         </div>
       </div>
