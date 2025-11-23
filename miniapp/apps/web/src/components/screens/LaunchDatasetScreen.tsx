@@ -1,14 +1,17 @@
 import { useState, useRef, ChangeEvent } from "react";
-import { useAccount, usePublicClient, useWriteContract, useSendTransaction, useGasPrice } from "wagmi";
-import { parseUnits, maxUint256, formatUnits, decodeEventLog, parseEther } from "viem";
+import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import { parseUnits, maxUint256, formatUnits, decodeEventLog } from "viem";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { DATA_ANNOTATE_ESCROW_ABI } from "@/abi/DataAnnotateEscrow";
 import { ERC20_ABI } from "@/abi/ERC20";
 
 // Constants
-const DATA_ANNOTATE_ESCROW_ADDRESS = "0xA39faDa84249f557a32338eA4b3604780fB9274c";
-const MOCK_CUSD_ADDRESS = "0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0";
+// Mainnet DataAnnotateEscrow Address - To be deployed/verified on Celo Mainnet
+const DATA_ANNOTATE_ESCROW_ADDRESS = "0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0"; 
+// Mainnet cUSD Address
+const CUSD_ADDRESS = "0x765DE816845861e75A25fCA122bb6898B8B1282a";
+// Curator Address (Mainnet)
 const CURATOR_ADDRESS = "0x0217389e5d0954b0c7243f12ef92b79fa564a928";
 
 interface LaunchDatasetScreenProps {
@@ -29,8 +32,6 @@ export function LaunchDatasetScreen({ onBack }: LaunchDatasetScreenProps) {
   const { address } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
-  const { sendTransactionAsync } = useSendTransaction();
-  const { data: gasPrice } = useGasPrice();
 
   // Pay per task calculation
   // Formula: cUSD amount / (# files * min annotations)
@@ -116,11 +117,14 @@ export function LaunchDatasetScreen({ onBack }: LaunchDatasetScreenProps) {
         const totalBountyWei = parseUnits(bounty, 18);
         
         const approveTx = await writeContractAsync({
-            address: MOCK_CUSD_ADDRESS,
+            address: CUSD_ADDRESS, // Use real cUSD address
             abi: ERC20_ABI,
             functionName: 'approve',
             args: [DATA_ANNOTATE_ESCROW_ADDRESS, maxUint256],
-            gasPrice: gasPrice ?? undefined,
+            // MiniPay requires feeCurrency for cUSD transactions if paying gas in cUSD,
+            // but 'approve' is a standard ERC20 call. 
+            // If paying for gas in cUSD, we might need extra params, but standard wagmi usually handles CELO gas.
+            // MiniPay documentation suggests native support via wagmi.
         });
         
         setLaunchStatus("Waiting for approval confirmation...");
@@ -143,8 +147,7 @@ export function LaunchDatasetScreen({ onBack }: LaunchDatasetScreenProps) {
                 address: DATA_ANNOTATE_ESCROW_ADDRESS,
                 abi: DATA_ANNOTATE_ESCROW_ABI,
                 functionName: 'createDataset',
-                args: [budgetPerFileWei, CURATOR_ADDRESS],
-                gasPrice: gasPrice ?? undefined,
+                args: [budgetPerFileWei, CURATOR_ADDRESS]
             });
             
             const receipt = await publicClient.waitForTransactionReceipt({ hash });
@@ -204,27 +207,42 @@ export function LaunchDatasetScreen({ onBack }: LaunchDatasetScreenProps) {
   };
 
   const handleDebugApprove = async () => {
-    console.log("Debug Transfer: Starting...");
-    if (!address) return alert("No address connected");
-    
+    console.log("Debug Approve: Starting...");
+
+    // Verify window.provider or window.ethereum
+    if (typeof window === 'undefined') {
+       alert("Window is undefined");
+       return;
+    }
+
+    if (!window.ethereum && !(window as any).provider) {
+       console.warn("No window.ethereum or window.provider found");
+       // We might still proceed if wagmi is handling it, but good to log
+    }
+
     try {
-      console.log("Debug Transfer: Gas Price", gasPrice);
+      // MiniPay only accepts legacy transactions for now
+      // Wagmi's writeContractAsync might be trying EIP-1559 by default if the chain is configured that way
+      // But for Celo, we often need feeCurrency.
+      // However, 'approve' is simple. Let's try setting gasPrice explicitly to force legacy transaction structure if possible,
+      // or rely on Wagmi's Celo chain definition which should handle this.
       
-      // Explicitly set gas limit to avoid estimation issues (often the cause of div by zero in internal calc)
-      const hash = await sendTransactionAsync({
-        to: address, // Send to self
-        value: parseEther('0.001'),
-        data: '0x', 
-        gasPrice: gasPrice ?? undefined,
-        gas: BigInt(100000), // Standard transfer gas limit
+      // NOTE: If this fails with div by zero, it might be gas estimation failing.
+      // We can try a raw transaction or just rely on the fact we are using the right address now.
+      
+      const approveTx = await writeContractAsync({
+          address: CUSD_ADDRESS, 
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [DATA_ANNOTATE_ESCROW_ADDRESS, maxUint256],
       });
-      console.log("Debug Transfer: TX Hash", hash);
-      const receipt = await publicClient?.waitForTransactionReceipt({ hash });
-      console.log("Debug Transfer: Receipt", receipt);
-      alert("Transfer Success!");
+      console.log("Debug Approve: TX Hash", approveTx);
+      const receipt = await publicClient?.waitForTransactionReceipt({ hash: approveTx });
+      console.log("Debug Approve: Receipt", receipt);
+      alert("Approve Success!");
     } catch (e) {
-      console.error("Debug Transfer: Error", e);
-      alert("Transfer Failed: " + (e as Error).message);
+      console.error("Debug Approve: Error", e);
+      alert("Approve Failed: " + (e as Error).message);
     }
   };
 
@@ -361,7 +379,7 @@ export function LaunchDatasetScreen({ onBack }: LaunchDatasetScreenProps) {
             onClick={handleDebugApprove}
             className="w-full bg-gray-800 text-white font-bold text-sm py-3 rounded-xl mt-4 border-4 border-black shadow-[4px_4px_0px_0px_#000] active:translate-y-1 active:shadow-none transition-all"
         >
-            🐞 DEBUG: FORCE 0.1 CELO TRANSFER
+            🐞 DEBUG: FORCE APPROVE
         </button>
 
       </div>

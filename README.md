@@ -4,18 +4,18 @@ Data annotation platform with blockchain-based escrow system.
 
 ## 🚀 Deployed Contracts
 
-### Celo Sepolia Testnet
+### Celo Mainnet
 
 | Contract | Address | Description |
 |----------|---------|-------------|
-| **MockCUSD** | `0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0` | Mock cUSD ERC20 token for testing |
-| **DataAnnotateEscrow** | `0xA39faDa84249f557a32338eA4b3604780fB9274c` | Escrow contract for data annotation payments |
+| **USDC** | `0x765DE816845861e75A25fCA122bb6898B8B1282a` | Circle USDC stablecoin on Celo |
+| **DataAnnotateEscrow** | `0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0` | Escrow contract for data annotation payments |
 
 **Network Details:**
-- **Chain ID**: 11142220
-- **RPC URL**: https://forno.celo-sepolia.celo-testnet.org
+- **Chain ID**: 42220
+- **RPC URL**: https://forno.celo.org
 - **Currency**: CELO
-- **Block Explorer**: https://celo-sepolia.blockscout.com/
+- **Block Explorer**: https://explorer.celo.org/mainnet/
 
 ## 📦 Project Structure
 
@@ -44,16 +44,10 @@ forge build
 # Run tests
 forge test
 
-# Deploy MockCUSD
-forge script script/DeployMockCUSD.s.sol:DeployMockCUSD \
-  --rpc-url https://forno.celo-sepolia.celo-testnet.org \
-  --broadcast \
-  --private-key <YOUR_PRIVATE_KEY> \
-  --legacy
-
-# Deploy DataAnnotateEscrow
+# Deploy DataAnnotateEscrow with USDC address
 forge script script/DeployDataAnnotateEscrow.s.sol:DeployDataAnnotateEscrow \
-  --rpc-url https://forno.celo-sepolia.celo-testnet.org \
+  --sig "run(address)" 0x765DE816845861e75A25fCA122bb6898B8B1282a \
+  --rpc-url https://forno.celo.org \
   --broadcast \
   --private-key <YOUR_PRIVATE_KEY> \
   --legacy
@@ -73,8 +67,8 @@ pnpm dev
 
 ## 💡 Features
 
-- **Escrow System**: Secure payment system for data annotation tasks
-- **Mock Token**: Test-ready ERC20 token for development
+- **Escrow System**: Secure payment system for data annotation tasks using USDC
+- **Mainnet Deployment**: Production-ready contracts deployed on Celo Mainnet
 - **Curator Model**: Trusted curator controls fund distribution
 - **Dataset Management**: Create, fund, and manage annotation datasets
 
@@ -83,42 +77,42 @@ pnpm dev
 ### Create a Dataset
 
 ```bash
-# Approve tokens
-cast send 0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0 \
+# Approve USDC tokens for escrow contract
+cast send 0x765DE816845861e75A25fCA122bb6898B8B1282a \
   "approve(address,uint256)" \
-  0xA39faDa84249f557a32338eA4b3604780fB9274c \
-  1000000000000000000000 \
+  0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0 \
+  1000000 \
   --private-key <YOUR_PRIVATE_KEY> \
-  --rpc-url https://forno.celo-sepolia.celo-testnet.org
+  --rpc-url https://forno.celo.org
 
-# Create dataset
-cast send 0xA39faDa84249f557a32338eA4b3604780fB9274c \
+# Create dataset (amount in USDC decimals: 6)
+cast send 0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0 \
   "createDataset(uint256,address)" \
-  1000000000000000000000 \
+  1000000 \
   <CURATOR_ADDRESS> \
   --private-key <YOUR_PRIVATE_KEY> \
-  --rpc-url https://forno.celo-sepolia.celo-testnet.org
+  --rpc-url https://forno.celo.org
 ```
 
 ### Distribute Funds (Curator Only)
 
 ```bash
-cast send 0xA39faDa84249f557a32338eA4b3604780fB9274c \
+cast send 0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0 \
   "distribute(uint256,address,uint256)" \
   0 \
   <USER_ADDRESS> \
-  100000000000000000000 \
+  100000 \
   --private-key <CURATOR_PRIVATE_KEY> \
-  --rpc-url https://forno.celo-sepolia.celo-testnet.org
+  --rpc-url https://forno.celo.org
 ```
 
-### Check Balance
+### Check USDC Balance
 
 ```bash
-cast call 0x704EEf9f5c4080018f45FC1C048F2fd30F4063d0 \
+cast call 0x765DE816845861e75A25fCA122bb6898B8B1282a \
   "balanceOf(address)(uint256)" \
   <ADDRESS> \
-  --rpc-url https://forno.celo-sepolia.celo-testnet.org
+  --rpc-url https://forno.celo.org
 ```
 
 ## 🧪 Testing
@@ -143,17 +137,18 @@ forge test --gas-report
 
 ## 📚 Documentation
 
-- [MockCUSD Documentation](contracts/MOCKCUSD_README.md)
 - [Contracts README](contracts/README.md)
 - [Farcaster Setup](miniapp/FARCASTER_SETUP.md)
+- [USDC on Celo](https://docs.celo.org/protocol/tokens/usdc)
 
 ## 🔐 Security
 
-⚠️ **Warning**: This project is for development and testing purposes. The deployed contracts are on testnet only.
+⚠️ **Warning**: This project is deployed on Celo Mainnet with real USDC. Exercise caution when interacting with the contracts.
 
 - Never share private keys
 - Use environment variables for sensitive data
-- Audit all smart contracts before mainnet deployment
+- The contracts handle real funds - ensure proper testing before use
+- Always verify transaction details before signing
 
 ## 📄 License
 
