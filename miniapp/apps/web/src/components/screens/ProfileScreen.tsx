@@ -392,9 +392,17 @@ function DatasetCard({ dataset, onUploadToMarketplace }: {
       )}
 
       {isComplete && hasFilecoinCid && !dataset.listed_on_marketplace && (
-        <div className="bg-blue-100 border-2 border-blue-500 rounded-lg p-3 text-center">
-          <p className="text-xs font-bold text-blue-900">✅ Uploaded to Filecoin</p>
-          <p className="text-[10px] text-blue-700 mt-1">Ready to list on marketplace!</p>
+        <div>
+          <div className="bg-blue-100 border-2 border-blue-500 rounded-lg p-2 text-center mb-2">
+            <p className="text-xs font-bold text-blue-900">✅ Uploaded to Filecoin</p>
+            <p className="text-[10px] text-blue-700 mt-1">Ready to list on marketplace!</p>
+          </div>
+          <button
+            onClick={() => onUploadToMarketplace(dataset)}
+            className="w-full bg-celo-yellow text-black font-bold py-2 px-4 rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_#000] active:translate-y-0.5 active:shadow-none transition-all"
+          >
+            🛒 List on Marketplace
+          </button>
         </div>
       )}
 

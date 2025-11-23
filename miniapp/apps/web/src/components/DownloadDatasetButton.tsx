@@ -26,7 +26,7 @@ export function DownloadDatasetButton({ listingId, datasetName }: DownloadDatase
   const [progress, setProgress] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [downloadedFiles, setDownloadedFiles] = useState<DownloadedFile[]>([]);
-  const [viewingFile, setViewingFile] = useState<DownloadedFile | null>(null);
+  const [showGallery, setShowGallery] = useState(false);
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -97,7 +97,8 @@ export function DownloadDatasetButton({ listingId, datasetName }: DownloadDatase
       }
 
       setDownloadedFiles(files);
-      setProgress(`✅ Downloaded ${files.length} files! Click to view.`);
+      setProgress(`✅ Downloaded ${files.length} files!`);
+      setShowGallery(true); // Automatically open gallery
       setDownloading(false);
 
     } catch (err) {
@@ -110,11 +111,11 @@ export function DownloadDatasetButton({ listingId, datasetName }: DownloadDatase
   return (
     <div className="flex flex-col gap-3">
       <button
-        onClick={handleDownload}
-        disabled={downloading || downloadedFiles.length > 0}
+        onClick={downloadedFiles.length > 0 ? () => setShowGallery(true) : handleDownload}
+        disabled={downloading}
         className="w-full bg-celo-forest text-white font-bold py-3 px-4 rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_#000] active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {downloading ? "⏳ Downloading..." : downloadedFiles.length > 0 ? "✅ Downloaded" : "📥 Download All Files"}
+        {downloading ? "⏳ Downloading..." : downloadedFiles.length > 0 ? "📂 View Dataset" : "📥 Download Dataset"}
       </button>
 
       {progress && (
@@ -129,93 +130,89 @@ export function DownloadDatasetButton({ listingId, datasetName }: DownloadDatase
         </div>
       )}
 
-      {/* Downloaded files list */}
-      {downloadedFiles.length > 0 && (
-        <div className="flex flex-col gap-2">
-          {downloadedFiles.map((file, idx) => (
-            <button
-              key={idx}
-              onClick={() => setViewingFile(file)}
-              className="bg-white border-2 border-gray-300 rounded-lg p-3 text-left hover:bg-gray-50 transition-colors"
-            >
-              <p className="font-bold text-sm text-gray-800 truncate">{file.filename}</p>
-              <p className="text-xs text-gray-500 mt-1">
-                {file.type === 'image' ? '🖼️' : file.type === 'audio' ? '🎵' : '📄'} {file.type}
-                {file.annotations && ' • Has annotations'}
-              </p>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Preview Modal (not fullscreen) */}
-      {viewingFile && (
+      {/* Gallery Modal - scrollable view of all files */}
+      {showGallery && downloadedFiles.length > 0 && (
         <div 
-          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-          onClick={() => setViewingFile(null)}
+          className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center"
+          onClick={() => setShowGallery(false)}
         >
           <div 
-            className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-auto shadow-xl"
+            className="bg-white rounded-lg w-full h-full max-w-md max-h-[85vh] flex flex-col shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="sticky top-0 bg-white border-b-2 border-gray-200 p-4 flex items-center justify-between">
-              <p className="font-bold text-gray-800 truncate flex-1">{viewingFile.filename}</p>
+            <div className="bg-celo-purple text-white p-3 rounded-t-lg flex items-center justify-between shrink-0">
+              <div>
+                <p className="font-bold text-sm">{datasetName}</p>
+                <p className="text-xs opacity-80">{downloadedFiles.length} files</p>
+              </div>
               <button
-                onClick={() => setViewingFile(null)}
-                className="bg-red-500 text-white px-3 py-1 rounded-lg font-bold ml-2"
+                onClick={() => setShowGallery(false)}
+                className="bg-red-500 text-white px-3 py-1 rounded font-bold"
               >
                 ✕
               </button>
             </div>
 
-            {/* Content */}
-            <div className="p-4">
-              {/* Image */}
-              {viewingFile.type === 'image' && (
-                <div className="mb-4">
-                  <img 
-                    src={viewingFile.dataUrl} 
-                    alt={viewingFile.filename}
-                    className="w-full rounded-lg border-2 border-gray-200"
-                  />
-                  <a
-                    href={viewingFile.dataUrl}
-                    download={viewingFile.filename}
-                    className="mt-2 block w-full bg-celo-yellow text-black font-bold py-2 px-4 rounded-lg border-2 border-black text-center"
-                  >
-                    💾 Save Image
-                  </a>
-                </div>
-              )}
+            {/* Scrollable Content - ALL files in sequence */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-6">
+              {downloadedFiles.map((file, idx) => (
+                <div key={idx} className="border-2 border-gray-300 rounded-lg p-3 bg-gray-50">
+                  {/* File Header */}
+                  <div className="mb-2">
+                    <p className="font-bold text-xs text-gray-700">
+                      {file.type === 'image' ? '🖼️' : file.type === 'audio' ? '🎵' : '📄'} File {idx + 1}/{downloadedFiles.length}
+                    </p>
+                    <p className="text-[10px] text-gray-500 truncate">{file.filename}</p>
+                  </div>
 
-              {/* Audio */}
-              {viewingFile.type === 'audio' && (
-                <div className="mb-4">
-                  <audio 
-                    src={viewingFile.dataUrl} 
-                    controls 
-                    className="w-full rounded-lg border-2 border-gray-200"
-                  />
-                  <a
-                    href={viewingFile.dataUrl}
-                    download={viewingFile.filename}
-                    className="mt-2 block w-full bg-celo-yellow text-black font-bold py-2 px-4 rounded-lg border-2 border-black text-center"
-                  >
-                    💾 Save Audio
-                  </a>
-                </div>
-              )}
+                  {/* Image */}
+                  {file.type === 'image' && (
+                    <div className="mb-2">
+                      <img 
+                        src={file.dataUrl} 
+                        alt={file.filename}
+                        className="w-full rounded border border-gray-300"
+                      />
+                      <a
+                        href={file.dataUrl}
+                        download={file.filename}
+                        className="mt-2 block w-full bg-celo-yellow text-black font-bold py-2 px-3 rounded-lg border-2 border-black text-center text-xs"
+                      >
+                        💾 Save Image
+                      </a>
+                    </div>
+                  )}
 
-              {/* Annotations */}
-              {viewingFile.annotations && (
-                <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-3">
-                  <p className="font-bold text-sm text-gray-700 mb-2">📝 Annotations:</p>
-                  <pre className="text-xs text-gray-600 overflow-auto max-h-60">
-                    {JSON.stringify(viewingFile.annotations, null, 2)}
-                  </pre>
+                  {/* Audio */}
+                  {file.type === 'audio' && (
+                    <div className="mb-2">
+                      <audio 
+                        src={file.dataUrl} 
+                        controls 
+                        className="w-full rounded"
+                      />
+                      <a
+                        href={file.dataUrl}
+                        download={file.filename}
+                        className="mt-2 block w-full bg-celo-yellow text-black font-bold py-2 px-3 rounded-lg border-2 border-black text-center text-xs"
+                      >
+                        💾 Save Audio
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Annotations */}
+                  {file.annotations && (
+                    <div className="bg-white border border-gray-300 rounded p-2">
+                      <p className="font-bold text-xs text-gray-700 mb-1">📝 Annotations:</p>
+                      <pre className="text-[10px] text-gray-600 overflow-auto max-h-32">
+                        {JSON.stringify(file.annotations, null, 2)}
+                      </pre>
+                    </div>
+                  )}
                 </div>
-              )}
+              ))}
             </div>
           </div>
         </div>
